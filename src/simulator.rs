@@ -15,7 +15,7 @@ impl QuantumSimulator {
     }
 
     /// Add QuantumChannel to QuantumSimulator
-    pub fn set_channel(mut self, channel: QuantumChannel) -> Self {
+    pub fn with_channel(mut self, channel: QuantumChannel) -> Self {
         self.channel = Some(channel);
         self
     }
