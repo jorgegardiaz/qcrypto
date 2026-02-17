@@ -1,26 +1,8 @@
-use crate::core::utils::{find_duplicate, gen_operator};
+use crate::core::errors::GateError;
+use crate::core::utils::{expand_operator, find_duplicate};
 use ndarray::{Array2, arr2};
 use num_complex::Complex64;
 use std::f64::consts::PI;
-use thiserror::Error;
-
-#[derive(Error, Debug, Clone)]
-pub enum GateError {
-    #[error("Matrix is not Unitary (U†U != I)")]
-    NonUnitary,
-
-    #[error("Matrix must be square")]
-    NotSquareMatrix,
-
-    #[error("Invalid Dimensions")]
-    InvalidDimensions,
-
-    #[error("Qubit {0} cannot be both control and target")]
-    ControlTargetOverlap(usize),
-
-    #[error("Duplicate qubit index found: {0}")]
-    DuplicateQubit(usize),
-}
 
 pub struct Gate {
     pub matrix: Array2<Complex64>,
@@ -84,7 +66,7 @@ impl Gate {
         }
 
         Ok(Gate {
-            matrix: gen_operator(num_total_qubits, &gate.matrix, targets, controls),
+            matrix: expand_operator(num_total_qubits, &gate.matrix, targets, controls),
             num_qubits: num_total_qubits,
         })
     }

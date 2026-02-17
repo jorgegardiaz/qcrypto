@@ -1,4 +1,4 @@
-use ndarray::{Array2, Axis};
+use ndarray::{Array1, Array2, Axis};
 use num_complex::Complex64;
 
 /// Computes the Kronecker (Tensor) product of two matrices.
@@ -30,8 +30,8 @@ pub fn trace(matrix: &Array2<Complex64>) -> Complex64 {
     matrix.diag().sum()
 }
 
-/// Generates the full unitary matrix (2^N x 2^N) for the whole system
-pub fn gen_operator(
+/// Generates the full operator matrix (2^N x 2^N) for the whole system
+pub fn expand_operator(
     num_total_qubits: usize,
     matrix: &Array2<Complex64>,
     targets: &[usize],
@@ -85,7 +85,7 @@ pub fn gen_operator(
     full_matrix
 }
 
-/// Extracs the bits in positions `indices` of the sequence `value``
+/// Extracs the bits in positions `indices` of the sequence `value`
 fn extract_bits(value: usize, indices: &[usize]) -> usize {
     let mut result = 0;
     for (i, &pos) in indices.iter().enumerate() {
@@ -108,7 +108,36 @@ fn deposit_bits(compact_value: usize, indices: &[usize]) -> usize {
     result
 }
 
+/// Find duplicate
 pub fn find_duplicate(indices: &[usize]) -> Option<usize> {
     let mut seen = std::collections::HashSet::new();
     indices.iter().find(|&&idx| !seen.insert(idx)).copied()
+}
+
+/// Checks completeness realtion for measurment operators
+pub fn check_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
+    let eye = Array2::<Complex64>::eye(dim);
+    let sum = ops
+        .iter()
+        .fold(Array2::<Complex64>::zeros((dim, dim)), |acc, op| {
+            let dag = op.t().mapv(|c| c.conj());
+            acc + dag.dot(op)
+        });
+    sum.iter()
+        .zip(eye.iter())
+        .all(|(a, b)| (a - b).norm() < 1e-12)
+}
+
+/// Outer product of tu vectors
+pub fn outer_product(a: &Array1<Complex64>, b: &Array1<Complex64>) -> Array2<Complex64> {
+    let n = a.len();
+    let m = b.len();
+    let mut res = Array2::zeros((n, m));
+
+    for i in 0..n {
+        for j in 0..m {
+            res[[i, j]] = a[i] * b[j].conj();
+        }
+    }
+    res
 }
