@@ -15,7 +15,7 @@ impl QuantumSimulator {
     }
 
     /// Add QuantumChannel to QuantumSimulator
-    pub fn with_channel(mut self, channel: QuantumChannel) -> Self {
+    pub fn set_channel(mut self, channel: QuantumChannel) -> Self {
         self.channel = Some(channel);
         self
     }
@@ -33,6 +33,11 @@ impl QuantumSimulator {
         for _ in 0..num_shots {
             // Clones QuantumState to not modify it
             let mut state_copy = state.clone();
+
+            // Applies channel if exists
+            if let Some(chan) = &self.channel {
+                state_copy.apply_channel(chan, targets)?;
+            }
 
             let result_value = state_copy.measure(measurement, targets)?;
 
