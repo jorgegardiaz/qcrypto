@@ -1,8 +1,11 @@
+mod channels;
 pub mod errors;
-pub mod gates;
-pub mod state;
+mod gates;
+mod measurements;
+mod state;
 pub mod utils;
 
-pub use errors::*;
-pub use gates::*;
+pub use channels::QuantumChannel;
+pub use gates::Gate;
+pub use measurements::{Measurement, MeasurementResult};
 pub use state::QuantumState;

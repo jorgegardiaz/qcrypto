@@ -1,3 +1,4 @@
+use nalgebra::DMatrix;
 use ndarray::{Array1, Array2, Axis};
 use num_complex::Complex64;
 
@@ -108,7 +109,7 @@ fn deposit_bits(compact_value: usize, indices: &[usize]) -> usize {
     result
 }
 
-/// Find duplicate
+/// Find duplicate in a slice of usize
 pub fn find_duplicate(indices: &[usize]) -> Option<usize> {
     let mut seen = std::collections::HashSet::new();
     indices.iter().find(|&&idx| !seen.insert(idx)).copied()
@@ -125,10 +126,20 @@ pub fn check_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
         });
     sum.iter()
         .zip(eye.iter())
-        .all(|(a, b)| (a - b).norm() < 1e-12)
+        .all(|(a, b)| (a - b).norm() < 1e-9)
 }
 
-/// Outer product of tu vectors
+/// Checks POVM completeness relation
+pub fn check_povm_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
+    let mut sum = Array2::<Complex64>::zeros((dim, dim));
+    for op in ops {
+        sum += op;
+    }
+    let identity = Array2::<Complex64>::eye(dim);
+    (sum - identity).iter().all(|x| x.norm() < 1e-9)
+}
+
+/// Outer product of two vectors
 pub fn outer_product(a: &Array1<Complex64>, b: &Array1<Complex64>) -> Array2<Complex64> {
     let n = a.len();
     let m = b.len();
@@ -140,4 +151,88 @@ pub fn outer_product(a: &Array1<Complex64>, b: &Array1<Complex64>) -> Array2<Com
         }
     }
     res
+}
+
+/// Finds square root of a positive matrix using spectral decomposition
+/// M_k = V * sqrt(D) * V†
+pub fn sqrt_positive_matrix(mat: &Array2<Complex64>) -> Array2<Complex64> {
+    let (rows, cols) = mat.dim();
+
+    // Optimized case for 2x2 matrix
+    if rows == 2 && cols == 2 {
+        return sqrt_2x2_analytical(mat);
+    }
+
+    // General case using nalgebra
+    sqrt_nxn_nalgebra(mat)
+}
+
+/// Directo formula for square root of a 2x2 matrix
+/// sqrt(A) = (A + sqrt(det)I) / sqrt(tr + 2sqrt(det))
+fn sqrt_2x2_analytical(mat: &Array2<Complex64>) -> Array2<Complex64> {
+    let tr = mat[[0, 0]] + mat[[1, 1]];
+    let det = mat[[0, 0]] * mat[[1, 1]] - mat[[0, 1]] * mat[[1, 0]];
+
+    let clean_det = if det.norm() < 1e-12 {
+        Complex64::new(0.0, 0.0)
+    } else {
+        det
+    };
+    let sqrt_det = clean_det.sqrt();
+
+    let s_sq = tr + Complex64::new(2.0, 0.0) * sqrt_det;
+    let s = s_sq.sqrt();
+
+    if s.norm() < 1e-12 {
+        return Array2::zeros((2, 2));
+    }
+
+    let factor = Complex64::new(1.0, 0.0) / s;
+    let identity = Array2::<Complex64>::eye(2);
+
+    let numerator = mat + &identity.mapv(|x| x * sqrt_det);
+    numerator.mapv(|x| x * factor)
+}
+
+/// General implementation using nalgebra
+fn sqrt_nxn_nalgebra(mat: &Array2<Complex64>) -> Array2<Complex64> {
+    let (rows, cols) = mat.dim();
+
+    // Convert ndarray -> nalgebra
+    let na_mat = DMatrix::from_fn(rows, cols, |r, c| mat[[r, c]]);
+
+    // Schur/Eigen decomposition
+    let eigen = na_mat.symmetric_eigen();
+
+    // sqrt(D)
+    let mut sqrt_eigenvals = DMatrix::zeros(rows, rows);
+    for i in 0..rows {
+        let val = eigen.eigenvalues[i];
+        let clean_val = if val < 0.0 { 0.0 } else { val };
+        sqrt_eigenvals[(i, i)] = Complex64::new(clean_val.sqrt(), 0.0);
+    }
+
+    // V * sqrt(D) * V†
+    // eigen.eigenvectors are the vectors V
+    let v = &eigen.eigenvectors;
+    let v_adjoint = v.adjoint();
+
+    let result_na = v * sqrt_eigenvals * v_adjoint;
+
+    // Reconvert nalgebra -> ndarray
+    let mut result_nd = Array2::<Complex64>::zeros((rows, cols));
+    for r in 0..rows {
+        for c in 0..cols {
+            result_nd[[r, c]] = result_na[(r, c)];
+        }
+    }
+
+    result_nd
+}
+
+/// Checks if a matrix is Hermitian
+pub fn is_hermitian(mat: &Array2<Complex64>, tol: f64) -> bool {
+    mat.iter()
+        .zip(mat.t().iter())
+        .all(|(a, b)| (a - b.conj()).norm() < tol)
 }

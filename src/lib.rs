@@ -1,13 +1,8 @@
-pub mod channels;
-pub mod core;
-pub mod measure;
-pub mod simulator;
+mod core;
+pub mod protocols;
+mod sampler;
 
-pub use crate::core::state::QuantumState;
-pub use crate::simulator::QuantumSimulator;
-
-pub use crate::channels::*;
-pub use crate::core::gates::*;
-pub use crate::measure::*;
-
-pub use crate::core::errors;
+pub use crate::core::{
+    Gate, Measurement, MeasurementResult, QuantumChannel, QuantumState, errors, utils,
+};
+pub use crate::sampler::Sampler;

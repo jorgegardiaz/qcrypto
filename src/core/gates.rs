@@ -1,5 +1,5 @@
 use crate::core::errors::GateError;
-use crate::core::utils::{expand_operator, find_duplicate};
+use crate::core::utils;
 use ndarray::{Array2, arr2};
 use num_complex::Complex64;
 use std::f64::consts::PI;
@@ -51,11 +51,11 @@ impl Gate {
         targets: &[usize],
         controls: &[usize],
     ) -> Result<Gate, GateError> {
-        if let Some(dup) = find_duplicate(targets) {
+        if let Some(dup) = utils::find_duplicate(targets) {
             return Err(GateError::DuplicateQubit(dup));
         }
 
-        if let Some(dup) = find_duplicate(controls) {
+        if let Some(dup) = utils::find_duplicate(controls) {
             return Err(GateError::DuplicateQubit(dup));
         }
 
@@ -66,138 +66,140 @@ impl Gate {
         }
 
         Ok(Gate {
-            matrix: expand_operator(num_total_qubits, &gate.matrix, targets, controls),
+            matrix: utils::expand_operator(num_total_qubits, &gate.matrix, targets, controls),
             num_qubits: num_total_qubits,
         })
     }
-}
 
-/// Identity Gate
-pub fn i() -> Gate {
-    Gate::new(arr2(&[
-        [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
-        [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
-    ]))
-    .unwrap()
-}
+    // --- Standard Gates ---
 
-/// Pauli-X Gate
-pub fn x() -> Gate {
-    Gate::new(arr2(&[
-        [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
-        [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
-    ]))
-    .unwrap()
-}
+    /// Identity Gate
+    pub fn i() -> Gate {
+        Gate::new(arr2(&[
+            [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
+            [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
+        ]))
+        .unwrap()
+    }
 
-/// Pauli-Y Gate
-pub fn y() -> Gate {
-    Gate::new(arr2(&[
-        [Complex64::new(0.0, 0.0), Complex64::new(0.0, -1.0)],
-        [Complex64::new(0.0, 1.0), Complex64::new(0.0, 0.0)],
-    ]))
-    .unwrap()
-}
+    /// Pauli-X Gate
+    pub fn x() -> Gate {
+        Gate::new(arr2(&[
+            [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
+            [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
+        ]))
+        .unwrap()
+    }
 
-/// Pauli-Z Gate
-pub fn z() -> Gate {
-    Gate::new(arr2(&[
-        [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
-        [Complex64::new(0.0, 0.0), Complex64::new(-1.0, 0.0)],
-    ]))
-    .unwrap()
-}
+    /// Pauli-Y Gate
+    pub fn y() -> Gate {
+        Gate::new(arr2(&[
+            [Complex64::new(0.0, 0.0), Complex64::new(0.0, -1.0)],
+            [Complex64::new(0.0, 1.0), Complex64::new(0.0, 0.0)],
+        ]))
+        .unwrap()
+    }
 
-/// Hadamard Gate
-pub fn h() -> Gate {
-    let factor = 1.0 / 2.0_f64.sqrt();
-    Gate::new(arr2(&[
-        [Complex64::new(factor, 0.0), Complex64::new(factor, 0.0)],
-        [Complex64::new(factor, 0.0), Complex64::new(-factor, 0.0)],
-    ]))
-    .unwrap()
-}
+    /// Pauli-Z Gate
+    pub fn z() -> Gate {
+        Gate::new(arr2(&[
+            [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
+            [Complex64::new(0.0, 0.0), Complex64::new(-1.0, 0.0)],
+        ]))
+        .unwrap()
+    }
 
-/// S Gate (Phase Gate, Z^1/2)
-pub fn s() -> Gate {
-    Gate::new(arr2(&[
-        [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
-        [Complex64::new(0.0, 0.0), Complex64::new(0.0, 1.0)],
-    ]))
-    .unwrap()
-}
+    /// Hadamard Gate
+    pub fn h() -> Gate {
+        let factor = 1.0 / 2.0_f64.sqrt();
+        Gate::new(arr2(&[
+            [Complex64::new(factor, 0.0), Complex64::new(factor, 0.0)],
+            [Complex64::new(factor, 0.0), Complex64::new(-factor, 0.0)],
+        ]))
+        .unwrap()
+    }
 
-/// T Gate (Z^1/4)
-pub fn t_gate() -> Gate {
-    let angle = PI / 4.0;
-    Gate::new(arr2(&[
-        [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
-        [
-            Complex64::new(0.0, 0.0),
-            Complex64::new(angle.cos(), angle.sin()),
-        ],
-    ]))
-    .unwrap()
-}
+    /// S Gate (Phase Gate, Z^1/2)
+    pub fn s() -> Gate {
+        Gate::new(arr2(&[
+            [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
+            [Complex64::new(0.0, 0.0), Complex64::new(0.0, 1.0)],
+        ]))
+        .unwrap()
+    }
 
-/// CNOT Gate
-pub fn cnot() -> Gate {
-    Gate::new(arr2(&[
-        [
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-        ],
-        [
-            Complex64::new(0.0, 0.0),
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-        ],
-        [
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(1.0, 0.0),
-        ],
-        [
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.0, 0.0),
-        ],
-    ]))
-    .unwrap()
-}
+    /// T Gate (Z^1/4)
+    pub fn t_gate() -> Gate {
+        let angle = PI / 4.0;
+        Gate::new(arr2(&[
+            [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(angle.cos(), angle.sin()),
+            ],
+        ]))
+        .unwrap()
+    }
 
-/// SWAP Gate
-pub fn swap() -> Gate {
-    Gate::new(arr2(&[
-        [
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-        ],
-        [
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.0, 0.0),
-        ],
-        [
-            Complex64::new(0.0, 0.0),
-            Complex64::new(1.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-        ],
-        [
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(0.0, 0.0),
-            Complex64::new(1.0, 0.0),
-        ],
-    ]))
-    .unwrap()
+    /// CNOT Gate
+    pub fn cnot() -> Gate {
+        Gate::new(arr2(&[
+            [
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+        ]))
+        .unwrap()
+    }
+
+    /// SWAP Gate
+    pub fn swap() -> Gate {
+        Gate::new(arr2(&[
+            [
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+            ],
+            [
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(0.0, 0.0),
+                Complex64::new(1.0, 0.0),
+            ],
+        ]))
+        .unwrap()
+    }
 }

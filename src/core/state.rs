@@ -1,8 +1,8 @@
-use crate::channels::QuantumChannel;
+use crate::QuantumChannel;
 use crate::core::Gate;
 use crate::core::errors::{ChannelError, MeasurementError, StateError};
-use crate::core::utils::{find_duplicate, trace};
-use crate::measure::{Measurement, MeasurementResult};
+use crate::core::utils::{find_duplicate, kronecker_product, trace};
+use crate::{Measurement, MeasurementResult};
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
 use rand::Rng;
@@ -291,5 +291,17 @@ impl QuantumState {
         self.density_matrix = new_rho;
 
         Ok(())
+    }
+
+    /// Composes the QuantumState with an ancilla state via tensor product
+    pub fn compose(&self, ancilla_state: &QuantumState) -> Result<QuantumState, StateError> {
+        let composite_matrix =
+            kronecker_product(&self.density_matrix, &ancilla_state.density_matrix);
+        let composite_num_qubits = self.num_qubits + ancilla_state.num_qubits;
+        // Returns a different QuantumState
+        Ok(QuantumState {
+            density_matrix: composite_matrix,
+            num_qubits: composite_num_qubits,
+        })
     }
 }

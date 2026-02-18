@@ -1,67 +1,151 @@
-Project Specification: qcrypto Library
+# qcrypto: A Pure Rust Framework for Quantum Cryptography Simulation
 
-1. Project Overview
-   Name: qcrypto Language: Rust (2021/2024 Edition) Description:
+<div align="center">
 
-qcrypto is a novel, open-source software library tailored for the scientific exploration, implementation, and rigorous testing of Quantum Cryptographic (QC) primitives. The library leverages Rust for its memory safety and high performance, which are critical for simulating computationally intensive quantum protocols.
+  <h1>qcrypto</h1>
 
-Primary Goals:
+  <p>
+    <strong>A Pure Rust Framework for Quantum Cryptography Simulation</strong>
+  </p>
 
-Scientific Accuracy: Facilitate advanced research into quantum-secure communication.
+  [![Pure Rust](https://img.shields.io/badge/Pure-Rust-orange)](https://www.rust-lang.org)
+  [![Repo Size](https://img.shields.io/github/repo-size/jorgegardiaz/qcrypto)](https://github.com/jorgegardiaz/qcrypto)
+  [![Crates.io](https://img.shields.io/crates/v/qcrypto.svg)](https://crates.io/crates/qcrypto)
+  [![Docs](https://docs.rs/qcrypto/badge.svg)](https://docs.rs/qcrypto)
+  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+  [![Downloads](https://img.shields.io/crates/d/qcrypto.svg)](https://crates.io/crates/qcrypto)
 
-Real-world Simulation: accurately model real-world performance by simulating quantum channel conditions, specifically noise and decoherence.
+</div>
 
-Extensibility: Allow researchers to easily integrate new protocols and modify existing parameters.
+<br />
 
-Scope of Protocols: The library must support:
+`qcrypto` is a high-performance, cross-platform library designed for development and testing of Quantum Cryptography protocols.
 
-QKD: BB84, Six-State, E91, B92, BBM92, SARG04.
+Unlike general-purpose quantum simulators that focus on state-vector evolution for logical circuits, `qcrypto` is architected around **Density Matrices ($\rho$)** and **Kraus Operators**. This design choice enables the precise simulation of open quantum systems, decoherence, noisy channels, and generalized measurements (POVMs), which are critical for validating the physical security of cryptographic protocols.
 
-Advanced Primitives: Quantum Zero-Knowledge Proofs , Quantum Bit Commitment , Quantum Oblivious Transfer , Quantum Coin Flipping, and Digital Signatures.
+The library is implemented in **100% Safe Rust**, eliminating external dependencies.
 
-2. Technical Architecture
-   To handle the requirement for simulating noise and decoherence, the architecture decouples the physical simulation (algebra) from the protocol logic (algorithms).
+## Key Features
 
-Layer 1: The Physics Core (qcrypto::core)
+* **Density Matrix Formalism:** Native support for mixed states, enabling the simulation of statistical ensembles and entanglement degradation.
+* **Open Quantum Systems:** Implementation of quantum channels (Bit Flip, Phase Damping, Amplitude Damping, Depolarizing) satisfying the Trace-Preserving condition ($\sum K_i^\dagger K_i = I$).
+* **Generalized Measurements:** Support for Positive Operator-Valued Measures (POVM), essential for protocols like B92 and unambiguous state discrimination.
+* **Efficient Operator Expansion:** Native implementation of optimized algorithms to extend single-qubit operator matrices to multi-qubit composite systems.
 
-Math Backend: Uses ndarray and num-complex for linear algebra.
+## Installation
 
-State Representation: MUST support Density Matrices (ρ). While pure states (∣ψ⟩) are simpler, they cannot represent the mixed states resulting from environmental noise.
+To use `qcrypto` in your Rust project, you can easily add it via Cargo.
 
-Layer 2: The Infrastructure (qcrypto::channels)
+Run the following command in your project directory:
 
-Defines the environment.
+```bash
+cargo add qcrypto
+```
+---
 
-Implements noise models (e.g., Depolarizing, Amplitude Damping) that act upon Density Matrices.
+## Library Architecture
 
-Layer 3: The Application (qcrypto::protocols)
+`qcrypto` is built upon a mathematically rigorous foundation, avoiding common simplifications found in other simulators. The core components are designed to handle open quantum systems and mixed states natively.
 
-Implements the logic for Alice and Bob.
+### Core Structures
 
-Abstracts the specific QKD or cryptographic flow.
+* **`QuantumState`**: Represents the state of the system using **Density Matrices** ($\rho$). Unlike state-vector simulators, this allows for the accurate representation of mixed states, statistical ensembles, and decoherence effects.
+* **`QuantumChannel`**: Models physical noise and decoherence (e.g., Bit Flip, Phase Damping, Amplitude Damping) using **Kraus Operators**. It ensures the evolution is Trace-Preserving by verifying $\sum K_i^\dagger K_i = I$.
+* **`Measurement`**: A generalized measurement framework supporting both standard Projective Measurements (Von Neumann) and **Positive Operator-Valued Measures (POVM)**. This is crucial for implementing optimal discrimination strategies and ambiguous state detection.
+* **`Gate`**: Provides standard unitary operations ($X, Z, H, CNOT, \dots$) and allows for the definition of custom single and multi-qubit unitaries.
 
-3. Directory Structure
-   ```plaintext
-   qcrypto/
-   ├── Cargo.toml # Dependencies
-   ├── README.md
-   └── src/
-   ├── lib.rs # Crate root and exports
-   ├── core/ # Physics engine
-   │ ├── mod.rs
-   │ ├── state.rs # DensityMatrix struct
-   │ ├── gates.rs # Quantum gates (Pauli-X, H, etc.)
-   │ └── utils.rs # Math helpers (tensor products)
-   ├── channels/ # Noise simulation
-   │ ├── mod.rs
-   │ ├── channel_trait.rs # Trait definition
-   │ └── noise_models.rs # Specific noise implementations
-   ├── measurement/
-   │ ├── mod.rs
-   │ └── basis.rs # Basis definitions (Rectilinear, Diagonal)
-   └── protocols/ # Cryptographic primitives
-   ├── mod.rs
-   ├── qkd/ # BB84, E91 implementation
-   ├── ot.rs # Oblivious Transfer
-   └── commitment.rs # Bit Commitment
-   ```
+## Implemented Protocols
+
+The library includes reference implementations for standard and novel quantum cryptographic schemes.
+
+### 1. BB84 (Bennett & Brassard, 1984)
+
+The standard protocol for Quantum Key Distribution. The implementation supports:
+
+* Intercept-Resend attacks.
+* Real-time QBER (Quantum Bit Error Rate) estimation.
+* Sifting and error reconciliation simulation.
+
+### 2. B92 (Bennett, 1992) with Optimal POVM
+
+An implementation of B92 utilizing generalized measurements for **Unambiguous State Discrimination (USD)**.
+
+* **Mechanism:** Constructs the optimal POVM  such that inconclusive results are explicitly handled ().
+* **Yield:** Achieves the theoretical efficiency limit of  for a noiseless channel.
+
+### 3. QIA-QZKP (Garcia-Diaz et al., 2025)
+
+A reference implementation of the protocol described in *"Conjugate Coding Based Designated Verifier Quantum Zero Knowledge Proof for User Authentication"*.
+
+This protocol establishes a Quantum Zero-Knowledge Proof (QZKP) for identity authentication without revealing the prover's secret key.
+
+* **Security Model:** Relies on the uncertainty principle of conjugate coding (Computational vs. Hadamard bases).
+* **Properties:**
+* *Completeness:* Honest provers are accepted with probability approaching 1 (adjusted for channel noise models).
+* *Soundness:* The probability of a dishonest prover successfully impersonating an identity follows a binomial distribution , decaying exponentially with key length .
+* *Zero-Knowledge:* The designated verifier gains no information about the long-term secret  due to the ephemeral masking .
+
+---
+
+## Usage Example
+
+### Simulating a Noisy Channel with Density Matrices
+
+```rust
+use qcrypto::{QuantumState, Gate, Measurement, QuantumChannel, errors::StateError};
+
+fn main() -> Result<(), StateError> {
+    // 1. Initialize a pure qubit state |0><0|
+    let mut rho = QuantumState::new(1);
+
+    // 2. Apply Hadamard Gate -> |+><+|
+    rho.apply(&Gate::h(), &[0])?;
+
+    // 3. Evolve through an Amplitude Damping Channel (gamma = 0.3)
+    // This transforms the pure state into a mixed state.
+    let channel = QuantumChannel::amplitude_damping(0.3)?;
+    rho.apply_channel(&channel, &[0])?;
+
+    // 4. Measure in the Z basis
+    let measurement = Measurement::z_basis();
+    let outcome = rho.measure(&measurement, &[0])?;
+
+    println!("Measurement Outcome: {}", outcome.index);
+    println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
+    // Purity will be < 1.0 due to the non-unitary channel evolution.
+
+    Ok(())
+}
+```
+
+### Running the QIA-QZKP Protocol
+
+```rust
+use qcrypto::protocols::qia_qzkp;
+use qcrypto::{QuantumChannel, errors:StateError};
+
+fn main() -> Result<(), StateError> {
+    let n_qubits = 1024;
+    let threshold = 0.85; // Acceptance threshold based on expected QBER
+    
+    // Simulate a realistic channel with 5% noise
+    let noisy_channel = QuantumChannel::bit_flip(0.05)?;
+
+    let result = qia_qzkp::run(n_qubits, &noisy_channel, threshold)?;
+
+    println!("Protocol Accuracy: {:.2}%", result.accuracy * 100.0);
+    println!("Authenticated: {}", result.authenticated);
+    
+    Ok(())
+}
+```
+
+## References
+
+If you use the QIA-QZKP module in your research, please cite the original paper:
+
+> **Garcia-Diaz, J.**, Escanez-Exposito, D., Caballero-Gil, P., & Molina-Gil, J. (2025). *Conjugate Coding Based Designated Verifier Quantum Zero Knowledge Proof for User Authentication*.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

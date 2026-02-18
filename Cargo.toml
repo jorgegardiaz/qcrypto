@@ -1,9 +1,17 @@
 [package]
 name = "qcrypto"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2024"
+authors = ["Jorge Garcia-Diaz <jgarcidi@ull.edu.es>", "Daniel Escanez-Exposito <jescanez@ull.edu.es>"]
+description = "Quantum Cryptography library for quantum protocols testing and development."
+license = "MIT"
+
+[lib]
+name = "qcrypto"
+path = "src/lib.rs"
 
 [dependencies]
+nalgebra = "0.34.1"
 ndarray = "0.17.2"
 num-complex = "0.4.6"
 rand = "0.9.2"

@@ -35,6 +35,9 @@ pub enum MeasurementError {
 
     #[error("Duplicate qubit index found: {0}")]
     DuplicateQubit(usize),
+
+    #[error("Not an hermitian operator")]
+    NotHermitian,
 }
 
 #[derive(Error, Debug, Clone)]
