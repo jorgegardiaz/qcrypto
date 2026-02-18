@@ -5,13 +5,11 @@
   <p>
     <strong>A Pure Rust Framework for Quantum Cryptography Simulation</strong>
   </p>
-
+  
   [![Pure Rust](https://img.shields.io/badge/Pure-Rust-orange)](https://www.rust-lang.org)
-  [![Repo Size](https://img.shields.io/github/repo-size/jorgegardiaz/qcrypto)](https://github.com/jorgegardiaz/qcrypto)
   [![Crates.io](https://img.shields.io/crates/v/qcrypto.svg)](https://crates.io/crates/qcrypto)
   [![Docs](https://docs.rs/qcrypto/badge.svg)](https://docs.rs/qcrypto)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-  [![Downloads](https://img.shields.io/crates/d/qcrypto.svg)](https://crates.io/crates/qcrypto)
 
 </div>
 
