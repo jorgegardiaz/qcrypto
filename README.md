@@ -1,5 +1,3 @@
-# qcrypto: A Pure Rust Framework for Quantum Cryptography Simulation
-
 <div align="center">
 
   <h1>qcrypto</h1>
