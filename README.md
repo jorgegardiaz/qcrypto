@@ -15,7 +15,7 @@
 
 <br />
 
-`qcrypto` is a high-performance, cross-platform library designed for development and testing of Quantum Cryptography protocols.
+`qcrypto` is a high-performance, cross-platform library designed for the design, simulation, and validation of Quantum Cryptography protocols.
 
 Unlike general-purpose quantum simulators that focus on state-vector evolution for logical circuits, `qcrypto` is architected around **Density Matrices ($\rho$)** and **Kraus Operators**. This design choice enables the precise simulation of open quantum systems, decoherence, noisy channels, and generalized measurements (POVMs), which are critical for validating the physical security of cryptographic protocols.
 
