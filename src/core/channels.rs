@@ -49,7 +49,7 @@ impl QuantumChannel {
             }
         }
 
-        if !utils::check_completeness(&kraus_ops, rows) {
+        if !utils::check_kraus_completeness(&kraus_ops, rows) {
             return Err(ChannelError::NotComplete);
         }
 

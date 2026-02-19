@@ -59,7 +59,7 @@ impl Measurement {
             }
         }
 
-        if !utils::check_completeness(&operators, rows) {
+        if !utils::check_kraus_completeness(&operators, rows) {
             return Err(MeasurementError::NotComplete);
         }
 

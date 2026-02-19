@@ -58,7 +58,7 @@ impl Sampler {
         }
 
         // Get probabilities for each possible outcome
-        let (probs, _) = state_copy.set_measurement(measurement, targets)?;
+        let probs = state_copy.set_measurement(measurement, targets)?;
 
         // Pre-calculate Cumulative Distribution Function (CDF) once.
         let mut cdf = Vec::with_capacity(probs.len());

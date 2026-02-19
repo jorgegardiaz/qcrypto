@@ -1,7 +1,7 @@
 use crate::QuantumChannel;
 use crate::core::Gate;
 use crate::core::errors::{ChannelError, MeasurementError, StateError};
-use crate::core::utils::{find_duplicate, kronecker_product, trace};
+use crate::core::utils;
 use crate::{Measurement, MeasurementResult};
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
@@ -71,31 +71,10 @@ impl QuantumState {
             return Err(StateError::InvalidDimensions);
         }
 
-        let tr = trace(matrix);
+        let tr = utils::trace(matrix);
         if (tr - Complex64::new(1.0, 0.0)).norm() > 1e-12 {
             return Err(StateError::InvalidTrace(tr));
         }
-
-        Ok(())
-    }
-
-    /// Apply already extended operator ot whole system
-    fn apply_operator(&mut self, u: &Array2<Complex64>) -> Result<(), StateError> {
-        let (rows, cols) = u.dim();
-        let dim = 1 << self.num_qubits;
-
-        if rows != dim || cols != dim {
-            return Err(StateError::DimensionMismatch {
-                expected: dim,
-                got_rows: rows,
-                got_cols: cols,
-            });
-        }
-
-        let temp = u.dot(&self.density_matrix);
-
-        let u_dagger = u.t().mapv(|x| x.conj());
-        self.density_matrix = temp.dot(&u_dagger);
 
         Ok(())
     }
@@ -148,7 +127,7 @@ impl QuantumState {
     ///
     /// # Errors
     ///
-    /// Returns `StateError` if the matrix is invalid (trace != 1, invalid dims).
+    /// Returns `StateError` if the matrix is invalid (utils::trace != 1, invalid dims).
     pub fn from_density_matrix(matrix: Array2<Complex64>) -> Result<Self, StateError> {
         Self::check_density_matrix(&matrix)?;
         let (rows, _) = matrix.dim();
@@ -177,11 +156,15 @@ impl QuantumState {
         self.apply_controlled(gate, target_qubits, None)
     }
 
-    /// Applies a quantum gate with optional control qubits.
+    /// Applies a quantum gate with optional control qubits using local tensor updates.
+    ///
+    /// This method updates the density matrix according to the unitary evolution:
+    /// $\rho' = U \rho U^\dagger$.
+    /// By using local operations, it avoids O(N^3) global matrix multiplications.
     ///
     /// # Arguments
     ///
-    /// * `gate` - The gate to apply.
+    /// * `gate` - The local gate to apply (e.g., Pauli-X, Hadamard).
     /// * `target_qubits` - The target qubits.
     /// * `control_qubits` - Optional control qubits.
     pub fn apply_controlled(
@@ -190,6 +173,7 @@ impl QuantumState {
         target_qubits: &[usize],
         control_qubits: Option<&[usize]>,
     ) -> Result<(), StateError> {
+        // 1. Validate dimensions
         if gate.num_qubits != target_qubits.len() {
             return Err(StateError::DimensionMismatch {
                 expected: gate.num_qubits,
@@ -198,6 +182,7 @@ impl QuantumState {
             });
         }
 
+        // 2. Validate qubit indices
         for &q in target_qubits {
             self.validate_qubit_index(q)?;
         }
@@ -207,58 +192,92 @@ impl QuantumState {
             self.validate_qubit_index(q)?;
         }
 
-        let full_gate_operator = Gate::expand_gate(self.num_qubits, gate, target_qubits, controls)?;
+        // --- TENSOR UPDATE ENGINE ---
 
-        self.apply_operator(&full_gate_operator.matrix)
+        // Step 1: Left multiplication -> rho_temp = U * rho
+        // We use the local matrix of the gate directly.
+        let temp_rho = utils::apply_local_left(
+            self.num_qubits,
+            &self.density_matrix,
+            &gate.matrix,
+            target_qubits,
+            controls,
+        );
+
+        // Step 2: Calculate U_dagger (Conjugate Transpose)
+        let u_dagger = gate.matrix.t().mapv(|c| c.conj());
+
+        // Step 3: Right multiplication -> rho_new = rho_temp * U_dagger
+        let final_rho = utils::apply_local_right(
+            self.num_qubits,
+            &temp_rho,
+            &u_dagger,
+            target_qubits,
+            controls,
+        );
+
+        // Step 4: Update the system's density matrix
+        self.density_matrix = final_rho;
+
+        Ok(())
     }
 
     /// Calculates measurement probabilities without collapsing the state.
     ///
-    /// Returns the probabilities for each outcome and the corresponding expanded measurement operators.
-    ///
-    /// # Arguments
-    ///
-    /// * `measurement` - The measurement to perform.
-    /// * `target_qubits` - The qubits to measure.
+    /// Uses parallel local tensor updates to compute $p_k = \text{Tr}(M_k \rho M_k^\dagger)$
+    /// efficiently without expanding the measurement operators.
     pub fn set_measurement(
         &self,
         measurement: &Measurement,
         target_qubits: &[usize],
-    ) -> Result<(Vec<f64>, Vec<Array2<Complex64>>), StateError> {
+    ) -> Result<Vec<f64>, StateError> {
         for &q in target_qubits {
             self.validate_qubit_index(q)?;
         }
 
-        if let Some(dup) = find_duplicate(target_qubits) {
+        if let Some(dup) = utils::find_duplicate(target_qubits) {
             return Err(StateError::MeasurementError(
                 MeasurementError::DuplicateQubit(dup),
             ));
         }
 
-        let expanded_ops = measurement.get_expanded_operators(self.num_qubits, target_qubits)?;
+        let mut probs: Vec<f64> = measurement
+            .operators
+            .par_iter()
+            .map(|m_k| {
+                // rho_temp = M_k * rho
+                let temp = utils::apply_local_left(
+                    self.num_qubits,
+                    &self.density_matrix,
+                    m_k,
+                    target_qubits,
+                    &[],
+                );
 
-        let mut probs = Vec::with_capacity(expanded_ops.len());
-        let mut sum_probs = 0.0;
+                // M_k_dagger
+                let m_k_dagger = m_k.t().mapv(|c| c.conj());
 
-        for op in &expanded_ops {
-            let op_dagger = op.t().mapv(|c| c.conj());
+                // unnormalized_rho = rho_temp * M_k_dagger
+                let unnormalized_rho = utils::apply_local_right(
+                    self.num_qubits,
+                    &temp,
+                    &m_k_dagger,
+                    target_qubits,
+                    &[],
+                );
 
-            let temp = op.dot(&self.density_matrix);
-            let unnormalized_rho_prime = temp.dot(&op_dagger);
-            let tr = trace(&unnormalized_rho_prime);
+                // p_k = Tr(unnormalized_rho)
+                let tr = utils::trace(&unnormalized_rho);
+                tr.re.max(0.0)
+            })
+            .collect();
 
-            let p_k = tr.re.max(0.0);
-
-            probs.push(p_k);
-            sum_probs += p_k;
-        }
-
-        // Due to float, renormalazation of probabilities to ensure completeness
+        let sum_probs: f64 = probs.iter().sum();
         for p in &mut probs {
             *p /= sum_probs;
         }
 
-        Ok((probs, expanded_ops))
+        Ok(probs)
     }
 
     /// Randomly selects operator index ponderating using `probs`
@@ -278,33 +297,32 @@ impl QuantumState {
 
     /// Performs a physical measurement, collapsing the state.
     ///
-    /// The state is updated according to the measurement outcome: $\rho \to \frac{M_k \rho M_k^\dagger}{Tr(\dots)}$.
-    ///
-    /// # Arguments
-    ///
-    /// * `measurement` - The measurement to perform.
-    /// * `target_qubits` - The qubits to measure.
-    ///
-    /// # Returns
-    ///
-    /// A `MeasurementResult` containing the outcome index and value.
+    /// The state is updated according to the measurement outcome: $\rho \to \frac{M_k \rho M_k^\dagger}{\text{Tr}(\dots)}$.
+    /// Uses O(N^2) local tensor updates instead of dense matrix multiplications.
     pub fn measure(
         &mut self,
         measurement: &Measurement,
         target_qubits: &[usize],
     ) -> Result<MeasurementResult, StateError> {
-        let (probs, ops) = self.set_measurement(measurement, target_qubits)?;
+        let probs = self.set_measurement(measurement, target_qubits)?;
 
         let outcome_idx = self.pick_outcome(&probs);
         let p_selected = probs[outcome_idx];
 
-        // rho' = (M_k * rho * M_k†) / p_k
         if p_selected > 1e-12 {
-            let m_k = &ops[outcome_idx];
+            let m_k = &measurement.operators[outcome_idx];
             let m_k_dagger = m_k.t().mapv(|c| c.conj());
 
-            // M * rho * M†
-            let numerator = m_k.dot(&self.density_matrix).dot(&m_k_dagger);
+            let temp = utils::apply_local_left(
+                self.num_qubits,
+                &self.density_matrix,
+                m_k,
+                target_qubits,
+                &[],
+            );
+
+            let numerator =
+                utils::apply_local_right(self.num_qubits, &temp, &m_k_dagger, target_qubits, &[]);
 
             self.density_matrix = numerator.mapv(|val| val / Complex64::new(p_selected, 0.0));
         } else {
@@ -317,43 +335,55 @@ impl QuantumState {
         })
     }
 
-    /// Applies a quantum channel (noise model) to the state.
+    /// Applies a quantum channel (noise model) using local tensor updates and parallel processing.
     ///
-    /// The state evolves as $\rho \to \sum K_i \rho K_i^\dagger$.
+    /// The evolution follows the Kraus representation: $\rho \to \sum K_i \rho K_i^\dagger$.
+    /// This implementation leverages Rayon to parallelize the application of each Kraus operator
+    /// and uses bitwise local updates to maintain an O(N^2) complexity per operator.
     ///
     /// # Arguments
     ///
-    /// * `channel` - The channel to apply.
-    /// * `target_qubits` - The qubits the channel acts on.
+    /// * `channel` - The quantum channel containing the Kraus operators.
+    /// * `target_qubits` - The indices of the qubits affected by the noise.
     pub fn apply_channel(
         &mut self,
         channel: &QuantumChannel,
         target_qubits: &[usize],
     ) -> Result<(), StateError> {
-        if let Some(dup) = find_duplicate(target_qubits) {
+        // Validate that there are no duplicate qubit indices in the targets
+        if let Some(dup) = utils::find_duplicate(target_qubits) {
             return Err(StateError::ChannelError(ChannelError::DuplicateQubit(dup)));
         }
 
-        let ops = channel.get_expanded_operators(self.num_qubits, target_qubits)?;
-
         let dim = self.density_matrix.nrows();
+        let num_total_qubits = self.num_qubits;
 
-        let new_rho = ops
-            .into_par_iter()
+        // Use Rayon to parallelize the summation of Kraus terms
+        let new_rho = channel
+            .kraus_ops
+            .par_iter() // Parallel iteration over the small local Kraus matrices
             .map(|k| {
+                // 1. Left multiplication: rho_temp = K_i * rho
+                let rho_temp = utils::apply_local_left(
+                    num_total_qubits,
+                    &self.density_matrix,
+                    k,
+                    target_qubits,
+                    &[], // Noise channels typically don't have control qubits
+                );
+
+                // 2. Compute the adjoint (conjugate transpose) of the Kraus operator
                 let k_dagger = k.t().mapv(|c| c.conj());
 
-                // K * rho
-                let temp = k.dot(&self.density_matrix);
-
-                // (K * rho) * K†
-                temp.dot(&k_dagger)
+                // 3. Right multiplication: result = rho_temp * K_i_dagger
+                utils::apply_local_right(num_total_qubits, &rho_temp, &k_dagger, target_qubits, &[])
             })
             .reduce(
-                || Array2::<Complex64>::zeros((dim, dim)),
-                |acc, term| acc + term,
+                || Array2::<Complex64>::zeros((dim, dim)), // Identity for the summation (zero matrix)
+                |acc, term| acc + term,                    // Sum the density matrix terms
             );
 
+        // Update the state's density matrix with the result of the channel evolution
         self.density_matrix = new_rho;
 
         Ok(())
@@ -364,7 +394,7 @@ impl QuantumState {
     /// Creates a composite system $\rho_{total} = \rho_{self} \otimes \rho_{ancilla}$.
     pub fn compose(&self, ancilla_state: &QuantumState) -> Result<QuantumState, StateError> {
         let composite_matrix =
-            kronecker_product(&self.density_matrix, &ancilla_state.density_matrix);
+            utils::kronecker_product(&self.density_matrix, &ancilla_state.density_matrix);
         let composite_num_qubits = self.num_qubits + ancilla_state.num_qubits;
         // Returns a different QuantumState
         Ok(QuantumState {

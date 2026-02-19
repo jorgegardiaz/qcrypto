@@ -136,10 +136,10 @@ pub fn find_duplicate(indices: &[usize]) -> Option<usize> {
     indices.iter().find(|&&idx| !seen.insert(idx)).copied()
 }
 
-/// Checks completeness relation for measurement operators.
+/// Checks completeness relation for Kraus operators.
 ///
 /// Verifies if $\sum M_k^\dagger M_k = I$.
-pub fn check_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
+pub fn check_kraus_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
     let eye = Array2::<Complex64>::eye(dim);
     let sum = ops
         .iter()
@@ -261,4 +261,149 @@ pub fn is_hermitian(mat: &Array2<Complex64>, tol: f64) -> bool {
     mat.iter()
         .zip(mat.t().iter())
         .all(|(a, b)| (a - b.conj()).norm() < tol)
+}
+
+/// Applies a local quantum operator to the left side of a density matrix: `rho_new = U * rho`.
+///
+/// This function uses bitwise operations to perform a local tensor update,
+/// avoiding the computationally expensive O(N^3) expansion of the local matrix
+/// to the full 2^N x 2^N Hilbert space.
+///
+/// # Arguments
+///
+/// * `num_total_qubits` - Total number of qubits in the system (N).
+/// * `rho` - The current density matrix of the full system.
+/// * `local_matrix` - The small operator matrix (e.g., 2x2 for a single-qubit gate).
+/// * `targets` - Indices of the target qubits the operator acts upon.
+/// * `controls` - Indices of the control qubits.
+pub fn apply_local_left(
+    num_total_qubits: usize,
+    rho: &Array2<Complex64>,
+    local_matrix: &Array2<Complex64>,
+    targets: &[usize],
+    controls: &[usize],
+) -> Array2<Complex64> {
+    let dim = 1 << num_total_qubits;
+    let mut new_rho = Array2::<Complex64>::zeros((dim, dim));
+
+    // Build the control mask: bits are 1 at control qubit positions.
+    let mut control_mask = 0usize;
+    for &c in controls {
+        control_mask |= 1 << c;
+    }
+
+    // Build the target mask: bits are 1 at target qubit positions.
+    let mut target_mask = 0usize;
+    for &t in targets {
+        target_mask |= 1 << t;
+    }
+
+    // Passive mask: bits are 1 where qubits are neither targets nor controls.
+    // Since the operator only acts on targets, passive bits remain unchanged.
+    let passive_mask = !target_mask;
+
+    // Dimension of the local operator (e.g., 2 for 1 target qubit, 4 for 2 target qubits).
+    let k_dim = 1 << targets.len();
+
+    // Iterate over all columns. Left multiplication only mixes row elements.
+    for col in 0..dim {
+        // Iterate over all rows.
+        for row in 0..dim {
+            // If the current basis state does not satisfy the control conditions,
+            // the operator acts as the Identity matrix for this row.
+            if (row & control_mask) != control_mask {
+                new_rho[[row, col]] = rho[[row, col]];
+                continue;
+            }
+
+            // Extract the bit values of the target qubits from the current physical row index.
+            let small_row = extract_bits(row, targets);
+
+            let mut sum = Complex64::new(0.0, 0.0);
+
+            // Perform the local matrix-vector multiplication for the target subspace.
+            for small_col in 0..k_dim {
+                let val = local_matrix[[small_row, small_col]];
+
+                // Skip negligible values to optimize performance (sparse matrix behavior).
+                if val.norm_sqr() < f64::EPSILON {
+                    continue;
+                }
+
+                // Reconstruct the physical row index 'm':
+                // Combine the preserved passive bits of 'row' with the new target bits.
+                let m = (row & passive_mask) | deposit_bits(small_col, targets);
+
+                sum += val * rho[[m, col]];
+            }
+
+            new_rho[[row, col]] = sum;
+        }
+    }
+
+    new_rho
+}
+
+/// Applies a local quantum operator to the right side of a density matrix: `rho_new = rho * U`.
+///
+/// Similar to `apply_local_left`, this function uses bitwise operations to update
+/// the state locally, but it acts on the columns of the density matrix instead of the rows.
+pub fn apply_local_right(
+    num_total_qubits: usize,
+    rho: &Array2<Complex64>,
+    local_matrix: &Array2<Complex64>,
+    targets: &[usize],
+    controls: &[usize],
+) -> Array2<Complex64> {
+    let dim = 1 << num_total_qubits;
+    let mut new_rho = Array2::<Complex64>::zeros((dim, dim));
+
+    let mut control_mask = 0usize;
+    for &c in controls {
+        control_mask |= 1 << c;
+    }
+
+    let mut target_mask = 0usize;
+    for &t in targets {
+        target_mask |= 1 << t;
+    }
+
+    let passive_mask = !target_mask;
+    let k_dim = 1 << targets.len();
+
+    // Iterate over all rows. Right multiplication only mixes column elements.
+    for row in 0..dim {
+        for col in 0..dim {
+            // If the current basis state does not satisfy the control conditions,
+            // the operator acts as the Identity matrix for this column.
+            if (col & control_mask) != control_mask {
+                new_rho[[row, col]] = rho[[row, col]];
+                continue;
+            }
+
+            // Extract the bit values of the target qubits from the current physical column index.
+            let small_col_idx = extract_bits(col, targets);
+
+            let mut sum = Complex64::new(0.0, 0.0);
+
+            // Perform the local vector-matrix multiplication for the target subspace.
+            for small_row_idx in 0..k_dim {
+                // Note the index order for the local matrix: it's multiplied from the right.
+                let val = local_matrix[[small_row_idx, small_col_idx]];
+
+                if val.norm_sqr() < f64::EPSILON {
+                    continue;
+                }
+
+                // Reconstruct the physical column index 'm'.
+                let m = (col & passive_mask) | deposit_bits(small_row_idx, targets);
+
+                sum += rho[[row, m]] * val;
+            }
+
+            new_rho[[row, col]] = sum;
+        }
+    }
+
+    new_rho
 }
