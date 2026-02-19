@@ -6,15 +6,26 @@ use crate::{Measurement, MeasurementResult};
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
 use rand::Rng;
+use rayon::prelude::*;
 
+/// Represents a quantum state using density matrices.
+///
+/// The state is represented by a 2^N x 2^N density matrix $\rho$,
+/// satisfying $\rho^\dagger = \rho$, $\text{Tr}(\rho) = 1$, and $\rho \ge 0$.
 #[derive(Clone, Debug)]
 pub struct QuantumState {
+    /// The density matrix representing the state.
     pub density_matrix: Array2<Complex64>,
+    /// The number of qubits in the state.
     pub num_qubits: usize,
 }
 
 impl QuantumState {
-    /// Creates a new quantum state initialized to |0...0>.
+    /// Creates a new quantum state initialized to the ground state |0...0>.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_qubits` - The number of qubits in the system.
     pub fn new(num_qubits: usize) -> Self {
         let dim = 1 << num_qubits;
         let mut density_matrix = Array2::<Complex64>::zeros((dim, dim));
@@ -100,7 +111,17 @@ impl QuantumState {
         Ok(())
     }
 
-    /// Creates a QuantumState from a generic vector state.
+    /// Creates a `QuantumState` from a state vector (pure state).
+    ///
+    /// Converts a state vector $|\psi\rangle$ into a density matrix $\rho = |\psi\rangle\langle\psi|$.
+    ///
+    /// # Arguments
+    ///
+    /// * `vector` - The state vector as an `Array1<Complex64>`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StateError` if the vector is not normalized or has invalid dimensions.
     pub fn from_state_vector(vector: Array1<Complex64>) -> Result<Self, StateError> {
         Self::check_vector_state(&vector)?;
 
@@ -119,7 +140,15 @@ impl QuantumState {
         })
     }
 
-    /// Creates a QuantumState from a generic density matrix.
+    /// Creates a `QuantumState` directly from a density matrix.
+    ///
+    /// # Arguments
+    ///
+    /// * `matrix` - The density matrix $\rho$.
+    ///
+    /// # Errors
+    ///
+    /// Returns `StateError` if the matrix is invalid (trace != 1, invalid dims).
     pub fn from_density_matrix(matrix: Array2<Complex64>) -> Result<Self, StateError> {
         Self::check_density_matrix(&matrix)?;
         let (rows, _) = matrix.dim();
@@ -132,18 +161,29 @@ impl QuantumState {
         })
     }
 
-    /// Checks if a QuantumState is valid.
+    /// Checks if the current state is valid.
     pub fn is_valid(&self) -> Result<(), StateError> {
         Self::check_density_matrix(&self.density_matrix)?;
         Ok(())
     }
 
-    /// Applies non controlled quantum gate
+    /// Applies a quantum gate to the specified target qubits.
+    ///
+    /// # Arguments
+    ///
+    /// * `gate` - The gate to apply.
+    /// * `target_qubits` - The qubits the gate acts on.
     pub fn apply(&mut self, gate: &Gate, target_qubits: &[usize]) -> Result<(), StateError> {
         self.apply_controlled(gate, target_qubits, None)
     }
 
-    /// Applies generic quantum gate
+    /// Applies a quantum gate with optional control qubits.
+    ///
+    /// # Arguments
+    ///
+    /// * `gate` - The gate to apply.
+    /// * `target_qubits` - The target qubits.
+    /// * `control_qubits` - Optional control qubits.
     pub fn apply_controlled(
         &mut self,
         gate: &Gate,
@@ -172,7 +212,14 @@ impl QuantumState {
         self.apply_operator(&full_gate_operator.matrix)
     }
 
-    /// Returns the probability of each operator expanded to the whole system
+    /// Calculates measurement probabilities without collapsing the state.
+    ///
+    /// Returns the probabilities for each outcome and the corresponding expanded measurement operators.
+    ///
+    /// # Arguments
+    ///
+    /// * `measurement` - The measurement to perform.
+    /// * `target_qubits` - The qubits to measure.
     pub fn set_measurement(
         &self,
         measurement: &Measurement,
@@ -229,7 +276,18 @@ impl QuantumState {
         probs.len().saturating_sub(1)
     }
 
-    /// Phisical measurment which changes the state irretrievably
+    /// Performs a physical measurement, collapsing the state.
+    ///
+    /// The state is updated according to the measurement outcome: $\rho \to \frac{M_k \rho M_k^\dagger}{Tr(\dots)}$.
+    ///
+    /// # Arguments
+    ///
+    /// * `measurement` - The measurement to perform.
+    /// * `target_qubits` - The qubits to measure.
+    ///
+    /// # Returns
+    ///
+    /// A `MeasurementResult` containing the outcome index and value.
     pub fn measure(
         &mut self,
         measurement: &Measurement,
@@ -259,7 +317,14 @@ impl QuantumState {
         })
     }
 
-    /// Apply QuantumChannel to QuantumState
+    /// Applies a quantum channel (noise model) to the state.
+    ///
+    /// The state evolves as $\rho \to \sum K_i \rho K_i^\dagger$.
+    ///
+    /// # Arguments
+    ///
+    /// * `channel` - The channel to apply.
+    /// * `target_qubits` - The qubits the channel acts on.
     pub fn apply_channel(
         &mut self,
         channel: &QuantumChannel,
@@ -272,28 +337,31 @@ impl QuantumState {
         let ops = channel.get_expanded_operators(self.num_qubits, target_qubits)?;
 
         let dim = self.density_matrix.nrows();
-        let mut new_rho = Array2::<Complex64>::zeros((dim, dim));
 
-        // Apply Kraus operators and sum
-        for k in ops {
-            let k_dagger = k.t().mapv(|c| c.conj());
+        let new_rho = ops
+            .into_par_iter()
+            .map(|k| {
+                let k_dagger = k.t().mapv(|c| c.conj());
 
-            // K * rho
-            let temp = k.dot(&self.density_matrix);
+                // K * rho
+                let temp = k.dot(&self.density_matrix);
 
-            // (K * rho) * K†
-            let term = temp.dot(&k_dagger);
-
-            // Sum
-            new_rho = new_rho + term;
-        }
+                // (K * rho) * K†
+                temp.dot(&k_dagger)
+            })
+            .reduce(
+                || Array2::<Complex64>::zeros((dim, dim)),
+                |acc, term| acc + term,
+            );
 
         self.density_matrix = new_rho;
 
         Ok(())
     }
 
-    /// Composes the QuantumState with an ancilla state via tensor product
+    /// Composes the `QuantumState` with another state (tensor product).
+    ///
+    /// Creates a composite system $\rho_{total} = \rho_{self} \otimes \rho_{ancilla}$.
     pub fn compose(&self, ancilla_state: &QuantumState) -> Result<QuantumState, StateError> {
         let composite_matrix =
             kronecker_product(&self.density_matrix, &ancilla_state.density_matrix);
@@ -303,5 +371,12 @@ impl QuantumState {
             density_matrix: composite_matrix,
             num_qubits: composite_num_qubits,
         })
+    }
+
+    /// Gives the purity of a QuantumState $Tr(\rho^2)$
+    ///
+    /// The state is pure if and only if $Tr(\rho^2)$
+    pub fn purity(&self) -> f64 {
+        self.density_matrix.iter().map(|c| c.norm_sqr()).sum()
     }
 }

@@ -3,17 +3,34 @@ use crate::core::utils;
 use ndarray::{Array1, Array2, array};
 use num_complex::Complex64;
 
+/// Represents a general quantum measurement.
+///
+/// A measurement is defined by a set of operators $\{M_k\}$ such that $\sum M_k^\dagger M_k = I$.
+/// It also associates a real value with each measurement outcome.
 #[derive(Clone, Debug)]
 pub struct Measurement {
-    /// List of measurement operators
+    /// List of measurement operators (Kraus operators).
     pub operators: Vec<Array2<Complex64>>,
-    /// Associeted measurment value of the performed measurement
+    /// Associated measurement values for each outcome.
     pub values: Vec<f64>,
-    /// Number of qubits which the measurment acts
+    /// Number of qubits the measurement acts on.
     pub num_qubits: usize,
 }
 
 impl Measurement {
+    /// Creates a new `Measurement` from a set of operators and values.
+    ///
+    /// # Arguments
+    ///
+    /// * `operators` - A vector of `Array2<Complex64>` representing the measurement operators.
+    /// * `values` - A vector of `f64` values corresponding to the output of each operator.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MeasurementError` if:
+    /// - The number of operators and values do not match.
+    /// - The operators are not of correct dimensions.
+    /// - The operators do not satisfy the completeness relation ($\sum M_k^\dagger M_k = I$).
     pub fn new(
         operators: Vec<Array2<Complex64>>,
         values: Vec<f64>,
@@ -53,7 +70,18 @@ impl Measurement {
         })
     }
 
-    /// Creates a valid Measurement from given POVMs
+    /// Creates a valid Measurement from a given POVM (Positive Operator-Valued Measure).
+    ///
+    /// # Arguments
+    ///
+    /// * `povm_elements` - A vector of POVM elements $\{E_k\}$ where each $E_k$ is positive semi-definite and $\sum E_k = I$.
+    /// * `values` - A vector of values associated with each POVM element.
+    ///
+    /// # Errors
+    ///
+    /// Returns `MeasurementError` if:
+    /// - The elements dimensions are invalid or mismatched.
+    /// - The elements do not sum to Identity.
     pub fn from_povm(
         povm_elements: Vec<Array2<Complex64>>,
         values: Vec<f64>,
@@ -94,7 +122,12 @@ impl Measurement {
         })
     }
 
-    /// Expands measurements operator to a larger system
+    /// Expands the measurement operators to act on a larger system.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_total_qubits` - The size of the full system.
+    /// * `targets` - The indices of the qubits this measurement applies to.
     pub fn get_expanded_operators(
         &self,
         num_total_qubits: usize,
@@ -114,7 +147,7 @@ impl Measurement {
         Ok(expanded_ops)
     }
 
-    /// Z basis (Computational) -> {|0>, |1>}.
+    /// Creates a measurement in the Z basis (Computational basis) -> {|0>, |1>}.
     pub fn z_basis() -> Measurement {
         let v0: Array1<Complex64> = array![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)];
         let v1: Array1<Complex64> = array![Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)];
@@ -125,7 +158,7 @@ impl Measurement {
         Measurement::new(vec![p0, p1], vec![0.0, 1.0]).expect("Error in basis Z")
     }
 
-    /// X basis (Hadamard) -> {|+>, |->}.
+    /// Creates a measurement in the X basis (Hadamard basis) -> {|+>, |->}.
     pub fn x_basis() -> Measurement {
         let inv_sqrt2 = Complex64::new(1.0 / 2.0_f64.sqrt(), 0.0);
 
@@ -138,7 +171,7 @@ impl Measurement {
         Measurement::new(vec![p_plus, p_minus], vec![0.0, 1.0]).expect("Error in basis X")
     }
 
-    /// Y basis -> {|+i>, |-i>}
+    /// Creates a measurement in the Y basis -> {|+i>, |-i>}.
     pub fn y_basis() -> Measurement {
         let inv_sqrt2 = Complex64::new(1.0 / 2.0_f64.sqrt(), 0.0);
         let i_inv_sqrt2 = Complex64::new(0.0, 1.0 / 2.0_f64.sqrt());
@@ -153,10 +186,11 @@ impl Measurement {
     }
 }
 
+/// The result of a quantum measurement.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MeasurementResult {
-    /// Applied measurment operator index
+    /// The index of the outcome (and operator) that occurred.
     pub index: usize,
-    /// Measurement value
+    /// The value associated with the outcome.
     pub value: f64,
 }

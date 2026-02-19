@@ -1,8 +1,19 @@
+//! Utility functions for quantum operations.
+//!
+//! This module contains helper functions for:
+//! - Matrix operations (Kronecker product, trace, outer product, square root).
+//! - Operator expansion to larger systems.
+//! - Completeness checks for measurements and channels.
+//! - Bit manipulation for state indices.
+
 use nalgebra::DMatrix;
 use ndarray::{Array1, Array2, Axis};
 use num_complex::Complex64;
 
 /// Computes the Kronecker (Tensor) product of two matrices.
+///
+/// If `A` is an $m \times n$ matrix and `B` is a $p \times q$ matrix,
+/// the result is an $mp \times nq$ matrix.
 pub fn kronecker_product(a: &Array2<Complex64>, b: &Array2<Complex64>) -> Array2<Complex64> {
     let (m, n) = a.dim();
     let (p, q) = b.dim();
@@ -31,7 +42,17 @@ pub fn trace(matrix: &Array2<Complex64>) -> Complex64 {
     matrix.diag().sum()
 }
 
-/// Generates the full operator matrix (2^N x 2^N) for the whole system
+/// Generates the full operator matrix ($2^N \times 2^N$) for the whole system.
+///
+/// It expands a local operator acting on `targets` (and controlled by `controls`)
+/// to an operator on the full system of `num_total_qubits`.
+///
+/// # Arguments
+///
+/// * `num_total_qubits` - Total number of qubits in the system.
+/// * `matrix` - The matrix representation of the local gate.
+/// * `targets` - Indices of the target qubits.
+/// * `controls` - Indices of the control qubits.
 pub fn expand_operator(
     num_total_qubits: usize,
     matrix: &Array2<Complex64>,
@@ -115,7 +136,9 @@ pub fn find_duplicate(indices: &[usize]) -> Option<usize> {
     indices.iter().find(|&&idx| !seen.insert(idx)).copied()
 }
 
-/// Checks completeness realtion for measurment operators
+/// Checks completeness relation for measurement operators.
+///
+/// Verifies if $\sum M_k^\dagger M_k = I$.
 pub fn check_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
     let eye = Array2::<Complex64>::eye(dim);
     let sum = ops
@@ -129,7 +152,9 @@ pub fn check_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
         .all(|(a, b)| (a - b).norm() < 1e-9)
 }
 
-/// Checks POVM completeness relation
+/// Checks POVM completeness relation.
+///
+/// Verifies if $\sum E_k = I$.
 pub fn check_povm_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
     let mut sum = Array2::<Complex64>::zeros((dim, dim));
     for op in ops {
@@ -139,7 +164,7 @@ pub fn check_povm_completeness(ops: &[Array2<Complex64>], dim: usize) -> bool {
     (sum - identity).iter().all(|x| x.norm() < 1e-9)
 }
 
-/// Outer product of two vectors
+/// Computes the outer product of two vectors $|a\rangle\langle b|$.
 pub fn outer_product(a: &Array1<Complex64>, b: &Array1<Complex64>) -> Array2<Complex64> {
     let n = a.len();
     let m = b.len();
@@ -153,8 +178,9 @@ pub fn outer_product(a: &Array1<Complex64>, b: &Array1<Complex64>) -> Array2<Com
     res
 }
 
-/// Finds square root of a positive matrix using spectral decomposition
-/// M_k = V * sqrt(D) * V†
+/// Finds the square root of a positive semi-definite matrix.
+///
+/// Uses spectral decomposition $M = V D V^\dagger$ to compute $\sqrt{M} = V \sqrt{D} V^\dagger$.
 pub fn sqrt_positive_matrix(mat: &Array2<Complex64>) -> Array2<Complex64> {
     let (rows, cols) = mat.dim();
 

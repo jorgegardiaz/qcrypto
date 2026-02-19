@@ -1,21 +1,45 @@
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
 use rand::Rng;
 
-/// BB84 results
+/// The result of the BB84 protocol execution.
 pub struct BB84Result {
+    /// The total length of the raw key (number of qubits sent).
     pub raw_length: usize,
+    /// The length of the sifted key (bases matched).
     pub sifted_length: usize,
+    /// The number of errors found in the sifted key (bits mismatched).
     pub errors: usize,
+    /// The Quantum Bit Error Rate (QBER) in percentage.
     pub qber: f64,
+    /// The number of times Eve was detected (simulated).
     pub eve_detected_count: usize,
+    /// The final sifted key (matches between Alice and Bob).
     pub sifted_key: Vec<bool>,
+    /// Alice's original bits.
     pub alice_bits: Vec<bool>,
+    /// Alice's chosen bases (0: Z, 1: X).
     pub alice_bases: Vec<bool>,
+    /// Bob's chosen bases (0: Z, 1: X).
     pub bob_bases: Vec<bool>,
+    /// Bob's measurement results.
     pub bob_results: Vec<bool>,
 }
 
-/// Runs BB84 protocol
+/// Executes the BB84 QKD protocol.
+///
+/// In BB84, Alice prepares qubits in one of four states ($|0\rangle, |1\rangle, |+\rangle, |-\rangle$)
+/// chosen by a random bit and a random basis (Z or X).
+/// Bob measures in a random basis (Z or X).
+///
+/// # Arguments
+///
+/// * `num_qubits` - Number of qubits to transmit.
+/// * `channel` - The quantum channel (noise model).
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+///
+/// # Returns
+///
+/// A `BB84Result` with the simulation statistics and keys.
 pub fn run(
     num_qubits: usize,
     channel: &QuantumChannel,

@@ -2,23 +2,48 @@ use crate::{Measurement, QuantumChannel, QuantumState, errors::StateError};
 use rand::Rng;
 use std::collections::HashMap;
 
+/// A simulator for sampling quantum states.
+///
+/// The `Sampler` allows running multiple shots of a quantum measurement on a quantum state,
+/// optionally applying a quantum channel before measurement.
 #[derive(Debug, Clone, Default)]
 pub struct Sampler {
+    /// Optional quantum channel to apply to the state before measurement.
     pub channel: Option<QuantumChannel>,
 }
 
 impl Sampler {
+    /// Creates a new `Sampler` instance with no channel (noise-free).
     pub fn new() -> Self {
         Self { channel: None }
     }
 
-    /// Add QuantumChannel to QuantumSampler
+    /// sets the quantum channel for the sampler.
+    ///
+    /// # Arguments
+    ///
+    /// * `channel` - The `QuantumChannel` to apply.
     pub fn with_channel(mut self, channel: QuantumChannel) -> Self {
         self.channel = Some(channel);
         self
     }
 
-    /// Samples a QuantumState num_shots times using a designed QuantumMeasurement.
+    /// Samples a `QuantumState` multiple times using a specified `Measurement`.
+    ///
+    /// This method simulates the process of preparing a state, optionally passing it through a channel,
+    /// and then measuring it. It returns a distribution of measurement outcomes.
+    ///
+    /// # Arguments
+    ///
+    /// * `state` - The quantum state to measure.
+    /// * `measurement` - The measurement operator (POVM) to apply.
+    /// * `targets` - The indices of the qubits to measure.
+    /// * `num_shots` - The number of times to repeat the measurement.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a `HashMap` mapping outcome labels (strings) to their counts,
+    /// or a `StateError` if the simulation fails.
     pub fn run(
         &self,
         state: &QuantumState,

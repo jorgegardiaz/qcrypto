@@ -4,12 +4,29 @@ use ndarray::{Array2, arr2};
 use num_complex::Complex64;
 use std::f64::consts::PI;
 
+/// Represents a quantum gate.
+///
+/// A gate is defined by its unitary matrix and the number of qubits it acts on.
 pub struct Gate {
+    /// The unitary matrix of the gate.
     pub matrix: Array2<Complex64>,
+    /// The number of qubits the gate acts on.
     pub num_qubits: usize,
 }
 
 impl Gate {
+    /// Creates a new `Gate` from a unitary matrix.
+    ///
+    /// # Arguments
+    ///
+    /// * `matrix` - A square, unitary `Array2<Complex64>`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `GateError` if:
+    /// - The matrix is not square.
+    /// - The matrix dimensions are not a power of 2.
+    /// - The matrix is not unitary.
     pub fn new(matrix: Array2<Complex64>) -> Result<Self, GateError> {
         let (rows, cols) = matrix.dim();
 
@@ -44,7 +61,23 @@ impl Gate {
             .all(|(a, b)| (*a - *b).norm() < 1e-6)
     }
 
-    /// Generates full system gate
+    /// Expands a gate to act on a larger system of qubits.
+    ///
+    /// This function creates a new gate that acts on `num_total_qubits` by applying the original `gate`
+    /// to the specified `targets` and `controls` (if any), and Identity on the rest.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_total_qubits` - The total number of qubits in the system.
+    /// * `gate` - The base gate to expand.
+    /// * `targets` - Indices of the target qubits.
+    /// * `controls` - Indices of the control qubits.
+    ///
+    /// # Errors
+    ///
+    /// Returns `GateError` if:
+    /// - Duplicate indices are found in `targets` or `controls`.
+    /// - A qubit is used as both control and target.
     pub fn expand_gate(
         num_total_qubits: usize,
         gate: &Gate,
@@ -73,7 +106,7 @@ impl Gate {
 
     // --- Standard Gates ---
 
-    /// Identity Gate
+    /// Creates an Identity gate.
     pub fn i() -> Gate {
         Gate::new(arr2(&[
             [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
@@ -82,7 +115,7 @@ impl Gate {
         .unwrap()
     }
 
-    /// Pauli-X Gate
+    /// Creates a Pauli-X gate (NOT gate).
     pub fn x() -> Gate {
         Gate::new(arr2(&[
             [Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)],
@@ -91,7 +124,7 @@ impl Gate {
         .unwrap()
     }
 
-    /// Pauli-Y Gate
+    /// Creates a Pauli-Y gate.
     pub fn y() -> Gate {
         Gate::new(arr2(&[
             [Complex64::new(0.0, 0.0), Complex64::new(0.0, -1.0)],
@@ -100,7 +133,7 @@ impl Gate {
         .unwrap()
     }
 
-    /// Pauli-Z Gate
+    /// Creates a Pauli-Z gate.
     pub fn z() -> Gate {
         Gate::new(arr2(&[
             [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
@@ -109,7 +142,7 @@ impl Gate {
         .unwrap()
     }
 
-    /// Hadamard Gate
+    /// Creates a Hadamard gate.
     pub fn h() -> Gate {
         let factor = 1.0 / 2.0_f64.sqrt();
         Gate::new(arr2(&[
@@ -119,7 +152,7 @@ impl Gate {
         .unwrap()
     }
 
-    /// S Gate (Phase Gate, Z^1/2)
+    /// Creates an S gate (Phase gate, Z^1/2).
     pub fn s() -> Gate {
         Gate::new(arr2(&[
             [Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)],
@@ -128,7 +161,7 @@ impl Gate {
         .unwrap()
     }
 
-    /// T Gate (Z^1/4)
+    /// Creates a T gate (Z^1/4).
     pub fn t_gate() -> Gate {
         let angle = PI / 4.0;
         Gate::new(arr2(&[
@@ -141,38 +174,12 @@ impl Gate {
         .unwrap()
     }
 
-    /// CNOT Gate
+    /// Creates a CNOT (Controlled-NOT) gate.
     pub fn cnot() -> Gate {
-        Gate::new(arr2(&[
-            [
-                Complex64::new(1.0, 0.0),
-                Complex64::new(0.0, 0.0),
-                Complex64::new(0.0, 0.0),
-                Complex64::new(0.0, 0.0),
-            ],
-            [
-                Complex64::new(0.0, 0.0),
-                Complex64::new(1.0, 0.0),
-                Complex64::new(0.0, 0.0),
-                Complex64::new(0.0, 0.0),
-            ],
-            [
-                Complex64::new(0.0, 0.0),
-                Complex64::new(0.0, 0.0),
-                Complex64::new(0.0, 0.0),
-                Complex64::new(1.0, 0.0),
-            ],
-            [
-                Complex64::new(0.0, 0.0),
-                Complex64::new(0.0, 0.0),
-                Complex64::new(1.0, 0.0),
-                Complex64::new(0.0, 0.0),
-            ],
-        ]))
-        .unwrap()
+        Gate::expand_gate(2, &Gate::x(), &[1], &[0]).unwrap()
     }
 
-    /// SWAP Gate
+    /// Creates a SWAP gate.
     pub fn swap() -> Gate {
         Gate::new(arr2(&[
             [
@@ -201,5 +208,10 @@ impl Gate {
             ],
         ]))
         .unwrap()
+    }
+
+    /// Creates a Toffoli gate.
+    pub fn toffoli() -> Gate {
+        Gate::expand_gate(3, &Gate::x(), &[2], &[0, 1]).unwrap()
     }
 }

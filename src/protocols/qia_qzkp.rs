@@ -1,19 +1,44 @@
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
 use rand::Rng;
 
-/// QIA-QZKP protocol result
+/// The result of the QIA-QZKP protocol execution.
 pub struct QiaQZKPResult {
+    /// Total number of qubits used.
     pub total_qubits: usize,
+    /// Number of matching outcomes between Alice and Bob.
     pub matches: usize,
+    /// Accuracy of the authentication (matches / total_qubits).
     pub accuracy: f64,
+    /// Whether the authentication was successful based on the threshold.
     pub authenticated: bool,
+    /// Alice's secret identity/key 'a'.
     pub alice_id_a: Vec<bool>,
+    /// Alice's commitment 'b'.
     pub alice_commitment_b: Vec<bool>,
+    /// Bob's challenge 'c'.
     pub bob_challenge_c: Vec<bool>,
+    /// Bob's recovered challenge 'c_prime'.
     pub bob_recovered_c: Vec<bool>,
 }
-/// Executes a Quantum Zero Knowledge Proof for Identity Authentication
-/// based on Conjugate Coding and ping-pong like protocols
+
+/// Executes a Quantum Zero Knowledge Proof for Identity Authentication (QIA-QZKP).
+///
+/// This protocol is based on Conjugate Coding and ping-pong like interactions.
+/// It allows Alice to prove her identity to Bob without revealing her secret key.
+///
+/// # Arguments
+///
+/// * `num_qubits` - The number of rounds/qubits to run the protocol.
+/// * `channel` - The quantum channel to use for communication (simulating noise).
+/// * `acceptance_threshold` - The minimum accuracy required for successful authentication.
+///
+/// # Returns
+///
+/// A `QiaQZKPResult` containing the details of the protocol execution.
+///
+/// # Errors
+///
+/// Returns `StateError` if any quantum operation fails.
 pub fn run(
     num_qubits: usize,
     channel: &QuantumChannel,

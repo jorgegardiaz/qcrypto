@@ -1,20 +1,43 @@
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
 use rand::Rng;
 
-/// BBM92 results
+/// The result of the BBM92 protocol execution.
 pub struct Bbm92Result {
+    /// The total length of the raw key (number of entangled pairs).
     pub raw_length: usize,
+    /// The length of the sifted key (bases matched).
     pub sifted_length: usize,
+    /// The number of errors found in the sifted key.
     pub errors: usize,
+    /// The Quantum Bit Error Rate (QBER) in percentage.
     pub qber: f64,
+    /// The number of times Eve was detected (simulated).
     pub eve_detected_count: usize,
+    /// Alice's chosen bases (0: Z, 1: X).
     pub alice_bases: Vec<bool>,
+    /// Bob's chosen bases (0: Z, 1: X).
     pub bob_bases: Vec<bool>,
+    /// Alice's measurement results.
     pub alice_bits: Vec<bool>,
+    /// Bob's measurement results.
     pub bob_results: Vec<bool>,
 }
 
-/// Runs BBM92 protocol experiment (entanglement-based protocol)
+/// Executes the BBM92 QKD protocol.
+///
+/// BBM92 is an entanglement-based version of BB84.
+/// Instead of Alice sending states, a source distributes entangled pairs (EPR pairs) to Alice and Bob.
+/// They measure their respective qubits in random bases.
+///
+/// # Arguments
+///
+/// * `num_pairs` - Number of entangled pairs to distribute.
+/// * `channel` - The quantum channel (noise model) affecting the transmission.
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+///
+/// # Returns
+///
+/// A `Bbm92Result` with the simulation statistics and keys.
 pub fn run(
     num_pairs: usize,
     channel: &QuantumChannel,

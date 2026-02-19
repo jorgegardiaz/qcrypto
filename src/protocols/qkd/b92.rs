@@ -6,17 +6,44 @@ use ndarray::{Array2, arr2};
 use num_complex::Complex64;
 use rand::Rng;
 
+/// The result of the B92 protocol execution.
 pub struct B92Result {
+    /// The total length of the raw key (number of qubits sent).
     pub raw_length: usize,
+    /// The length of the conclusive key (after sifting, where Bob gets a conclusive result).
     pub conclusive_count: usize,
+    /// The number of errors found in the conclusive key.
     pub errors: usize,
+    /// The Quantum Bit Error Rate (QBER) in percentage.
     pub qber: f64,
+    /// The number of times Eve was detected (simulated).
     pub eve_detected_count: usize,
+    /// The final established key (matches between Alice and Bob).
     pub established_key: Vec<bool>,
+    /// Alice's original bits.
     pub alice_bits: Vec<bool>,
+    /// Bob's measurement results (0: bit 0, 1: bit 1, -1: inconclusive).
     pub bob_results: Vec<i8>,
 }
 
+/// Executes the B92 QKD protocol.
+///
+/// In B92, Alice sends one of two non-orthogonal states:
+/// - Bit 0 -> $|0\rangle$
+/// - Bit 1 -> $|+\rangle$ (Hadamard state)
+///
+/// Bob measures using a POVM that can conclusively identify the bit or return an inconclusive result.
+///
+/// # Arguments
+///
+/// * `num_qubits` - Number of qubits to transmit.
+/// * `channel` - The quantum channel (noise model).
+/// * `measurement` - Bob's POVM measurement device.
+/// * `eve_ratio` - Probability of Eve intercepting a qubit.
+///
+/// # Returns
+///
+/// A `B92Result` with the simulation statistics and keys.
 pub fn run(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -104,7 +131,12 @@ pub fn run(
     })
 }
 
-/// Contructs optimal POVM using Measurement::from_povm
+/// Constructs the optimal POVM for the B92 protocol.
+///
+/// The POVM consists of three elements:
+/// - $E_1$: Detects state $|+\rangle$ (implies bit 1 sent).
+/// - $E_2$: Detects state $|0\rangle$ (implies bit 0 sent).
+/// - $E_3$: Inconclusive result.
 pub fn build_optimal_povm() -> Result<Measurement, MeasurementError> {
     let zero = Complex64::new(0.0, 0.0);
     let sqrt2 = 2.0_f64.sqrt();
