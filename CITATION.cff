@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software in your research or project, please cite it using the following metadata."
+title: "qcrypto"
+version: 0.0.1
+date-released: "2026-02-19"
+authors:
+  - given-names: "Jorge"
+    family-names: "Garcia-Diaz"
+    orcid: "https://orcid.org/0009-0006-4400-6836"
+  - given-names: "Daniel"
+    family-names: "Escanez-Exposito"
+    orcid: "https://orcid.org/0000-0003-4215-0501"
+repository-code: "https://github.com/jorgegardiaz/qcrypto"
+url: "https://crates.io/crates/qcrypto"
+abstract: >-
+  qcrypto is a high-performance, cross-platform library designed for the design, simulation, and validation of Quantum Cryptography protocols.Unlike general-purpose quantum simulators that focus on state-vector evolution for logical circuits, qcrypto is architected around Density Matrices and Kraus Operators. This design choice enables the precise simulation of open quantum systems, decoherence, noisy channels, and generalized measurements (POVMs), which are critical for validating the physical security of cryptographic protocols.
+keywords:
+  - quantum-cryptography
+  - simulation
+  - physics
+  - rust
+license: "MIT"
