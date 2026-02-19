@@ -101,6 +101,8 @@ fn main() -> Result<(), StateError> {
     // This transforms the pure state into a mixed state.
     let channel = QuantumChannel::amplitude_damping(0.3)?;
     rho.apply_channel(&channel, &[0])?;
+    println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
+    // Purity will be < 1.0 due to the non-unitary channel evolution.
 
     // 4. Measure in the Z basis
     let measurement = Measurement::z_basis();
@@ -108,7 +110,7 @@ fn main() -> Result<(), StateError> {
 
     println!("Measurement Outcome: {}", outcome.index);
     println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
-    // Purity will be < 1.0 due to the non-unitary channel evolution.
+    // Purity will be 1 because it has been proyected
 
     Ok(())
 }
@@ -118,7 +120,7 @@ fn main() -> Result<(), StateError> {
 
 ```rust
 use qcrypto::protocols::qia_qzkp;
-use qcrypto::{QuantumChannel, errors:StateError};
+use qcrypto::{QuantumChannel, errors::StateError};
 
 fn main() -> Result<(), StateError> {
     let n_qubits = 1024;
