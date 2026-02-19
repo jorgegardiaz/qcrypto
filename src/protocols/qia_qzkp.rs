@@ -1,3 +1,8 @@
+//! Quantum Identity Authentication - Quantum Zero Knowledge Proof (QIA-QZKP) protocol.
+//!
+//! This module implements a QIA-QZKP scheme based on conjugate coding, allowing
+//! a prover to demonstrate his identity without revealing information about his secret.
+
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
 use rand::Rng;
 
@@ -53,7 +58,7 @@ pub fn run(
     let mut c_recovered_vec = Vec::with_capacity(num_qubits);
     let mut matches = 0;
 
-    for i in 0..num_qubits {
+    for &a_bit in &a {
         // Alice's commitment
         let b_bit = rng.random_bool(0.5);
         b_vec.push(b_bit);
@@ -63,7 +68,7 @@ pub fn run(
         //Bob generates the secret state |psi>
         let mut state = QuantumState::new(1);
 
-        if a[i] {
+        if a_bit {
             state.apply(&Gate::x(), &[0])?;
         }
 
@@ -95,11 +100,11 @@ pub fn run(
             state.apply(&Gate::z(), &[0])?;
         }
 
-        if a[i] ^ b_bit {
+        if a_bit ^ b_bit {
             state.apply(&Gate::h(), &[0])?;
         }
 
-        if a[i] {
+        if a_bit {
             state.apply(&Gate::z(), &[0])?;
         }
 
@@ -108,7 +113,7 @@ pub fn run(
 
         // Bob's verification
         // Bob measures using a for basis
-        let measurement = if a[i] {
+        let measurement = if a_bit {
             Measurement::x_basis()
         } else {
             Measurement::z_basis()

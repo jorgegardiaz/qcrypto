@@ -1,15 +1,22 @@
+//! BBM92 Quantum Key Distribution Protocol.
+//!
+//! BBM92 is an entanglement-based QKD protocol proposed by Bennett, Brassard, and Mermin in 1992.
+//! It is logically equivalent to BB84 but uses entangled photon pairs (EPR source) instead of single
+//! photon pulses prepared by Alice.
+
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
 use rand::Rng;
+use rand::seq::SliceRandom;
 
 /// The result of the BBM92 protocol execution.
 pub struct Bbm92Result {
     /// The total length of the raw key (number of entangled pairs).
     pub raw_length: usize,
-    /// The length of the sifted key (bases matched).
-    pub sifted_length: usize,
-    /// The number of errors found in the sifted key.
-    pub errors: usize,
-    /// The Quantum Bit Error Rate (QBER) in percentage.
+    /// The number of bits where bases matched (before sacrificing).
+    pub total_sifted: usize,
+    /// The number of errors found in the check bits.
+    pub check_errors: usize,
+    /// The Quantum Bit Error Rate (QBER) in percentage (on check bits).
     pub qber: f64,
     /// The number of times Eve was detected (simulated).
     pub eve_detected_count: usize,
@@ -21,6 +28,8 @@ pub struct Bbm92Result {
     pub alice_bits: Vec<bool>,
     /// Bob's measurement results.
     pub bob_results: Vec<bool>,
+    /// The final established key (sifted key minus check bits).
+    pub established_key: Vec<bool>,
 }
 
 /// Executes the BBM92 QKD protocol.
@@ -34,6 +43,7 @@ pub struct Bbm92Result {
 /// * `num_pairs` - Number of entangled pairs to distribute.
 /// * `channel` - The quantum channel (noise model) affecting the transmission.
 /// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+/// * `check_ratio` - Fraction of sifted bits to sacrifice for QBER estimation.
 ///
 /// # Returns
 ///
@@ -42,6 +52,7 @@ pub fn run(
     num_pairs: usize,
     channel: &QuantumChannel,
     eve_ratio: f64,
+    check_ratio: f64,
 ) -> Result<Bbm92Result, StateError> {
     let mut rng = rand::rng();
 
@@ -103,33 +114,52 @@ pub fn run(
     }
 
     // Sifting stage
-    let mut sifted_len = 0;
-    let mut errors = 0;
+    // 1. Identify indices where bases match
+    let input_indices: Vec<usize> = (0..num_pairs).collect();
+    let mut match_indices: Vec<usize> = input_indices
+        .into_iter()
+        .filter(|&i| alice_bases[i] == bob_bases[i])
+        .collect();
 
-    for i in 0..num_pairs {
-        if alice_bases[i] == bob_bases[i] {
-            sifted_len += 1;
-            if alice_bits[i] != bob_results[i] {
-                errors += 1;
-            }
+    let total_sifted = match_indices.len();
+
+    // 2. Shuffle indices
+    match_indices.shuffle(&mut rng);
+
+    // 3. Split into check and key indices
+    let num_check = (total_sifted as f64 * check_ratio).round() as usize;
+    let (check_indices, key_indices) = match_indices.split_at(num_check);
+
+    // 4. Calculate QBER on check bits
+    let mut check_errors = 0;
+    for &i in check_indices {
+        if alice_bits[i] != bob_results[i] {
+            check_errors += 1;
         }
     }
 
-    let qber = if sifted_len > 0 {
-        (errors as f64 / sifted_len as f64) * 100.0
+    let qber = if num_check > 0 {
+        (check_errors as f64 / num_check as f64) * 100.0
     } else {
         0.0
     };
 
+    // 5. Build established key
+    let mut established_key = Vec::with_capacity(key_indices.len());
+    for &i in key_indices {
+        established_key.push(alice_bits[i]);
+    }
+
     Ok(Bbm92Result {
         raw_length: num_pairs,
-        sifted_length: sifted_len,
-        errors,
+        total_sifted,
+        check_errors,
         qber,
         eve_detected_count,
         alice_bases,
         bob_bases,
         alice_bits,
         bob_results,
+        established_key,
     })
 }

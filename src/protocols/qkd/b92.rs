@@ -1,3 +1,8 @@
+//! B92 Quantum Key Distribution Protocol.
+//!
+//! B92 is a simplified version of BB84 proposed by Charles Bennett in 1992.
+//! It uses only two non-orthogonal quantum states (e.g., |0> and |+>).
+
 use crate::{
     Gate, Measurement, QuantumChannel, QuantumState,
     errors::{MeasurementError, StateError},
@@ -5,6 +10,7 @@ use crate::{
 use ndarray::{Array2, arr2};
 use num_complex::Complex64;
 use rand::Rng;
+use rand::seq::SliceRandom;
 
 /// The result of the B92 protocol execution.
 pub struct B92Result {
@@ -12,13 +18,13 @@ pub struct B92Result {
     pub raw_length: usize,
     /// The length of the conclusive key (after sifting, where Bob gets a conclusive result).
     pub conclusive_count: usize,
-    /// The number of errors found in the conclusive key.
-    pub errors: usize,
-    /// The Quantum Bit Error Rate (QBER) in percentage.
+    /// The number of errors found in the check bits.
+    pub check_errors: usize,
+    /// The Quantum Bit Error Rate (QBER) calculated on the check bits.
     pub qber: f64,
     /// The number of times Eve was detected (simulated).
     pub eve_detected_count: usize,
-    /// The final established key (matches between Alice and Bob).
+    /// The final established key (matches between Alice and Bob, excluding check bits).
     pub established_key: Vec<bool>,
     /// Alice's original bits.
     pub alice_bits: Vec<bool>,
@@ -40,6 +46,7 @@ pub struct B92Result {
 /// * `channel` - The quantum channel (noise model).
 /// * `measurement` - Bob's POVM measurement device.
 /// * `eve_ratio` - Probability of Eve intercepting a qubit.
+/// * `check_ratio` - Fraction of conclusive bits to sacrifice for QBER estimation (0.0 to 1.0).
 ///
 /// # Returns
 ///
@@ -49,6 +56,7 @@ pub fn run(
     channel: &QuantumChannel,
     measurement: &Measurement,
     eve_ratio: f64,
+    check_ratio: f64,
 ) -> Result<B92Result, StateError> {
     let mut rng = rand::rng();
 
@@ -57,9 +65,7 @@ pub fn run(
 
     let mut alice_bits = Vec::with_capacity(num_qubits);
     let mut bob_results = Vec::with_capacity(num_qubits);
-    let mut established_key = Vec::new();
     let mut eve_intercepted_count = 0;
-    let mut errors = 0;
 
     for _ in 0..num_qubits {
         // Alice prepare qubit
@@ -86,7 +92,7 @@ pub fn run(
         }
 
         // Bob measures using his POVM
-        let res = state.measure(&bob_device, &[0])?;
+        let res = state.measure(bob_device, &[0])?;
 
         let inferred_bit_opt = match res.index {
             0 => Some(true),  // Detected E1 -> Bit 1
@@ -102,27 +108,52 @@ pub fn run(
             None => -1,
         };
         bob_results.push(res_code);
+    }
 
-        // Sifting Stage
-        if let Some(inferred_bit) = inferred_bit_opt {
-            established_key.push(inferred_bit);
-            if inferred_bit != a_bit {
-                errors += 1;
-            }
+    // Sifting Stage
+    // 1. Identify indices where Bob got a conclusive result
+    let mut conclusive_indices: Vec<usize> = bob_results
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &res)| if res != -1 { Some(i) } else { None })
+        .collect();
+
+    let total_conclusive = conclusive_indices.len();
+
+    // 2. Shuffle indices to randomly select bits for error checking
+    conclusive_indices.shuffle(&mut rng);
+
+    // 3. Split into check bits and key bits
+    let num_check = (total_conclusive as f64 * check_ratio).round() as usize;
+    let (check_indices, key_indices) = conclusive_indices.split_at(num_check);
+
+    // 4. Calculate QBER on check bits
+    let mut check_errors = 0;
+    for &idx in check_indices {
+        // bob_results[idx] is 0 or 1 here (conclusive)
+        let b_val = bob_results[idx] == 0; // 0 -> true, 1 -> false (based on res_code logic above: 0->true, 1->false)
+        if alice_bits[idx] != b_val {
+            check_errors += 1;
         }
     }
 
-    let conclusive_len = established_key.len();
-    let qber = if conclusive_len > 0 {
-        (errors as f64 / conclusive_len as f64) * 100.0
+    let qber = if num_check > 0 {
+        (check_errors as f64 / num_check as f64) * 100.0
     } else {
         0.0
     };
 
+    // 5. Build established key from key bits
+    let mut established_key = Vec::with_capacity(key_indices.len());
+    for &idx in key_indices {
+        let b_val = bob_results[idx] == 0;
+        established_key.push(b_val);
+    }
+
     Ok(B92Result {
         raw_length: num_qubits,
-        conclusive_count: conclusive_len,
-        errors,
+        conclusive_count: total_conclusive,
+        check_errors,
         qber,
         eve_detected_count: eve_intercepted_count,
         established_key,
