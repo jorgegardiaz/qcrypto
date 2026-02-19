@@ -3,7 +3,10 @@ name = "qcrypto"
 version = "0.0.1"
 edition = "2024"
 authors = ["Jorge Garcia-Diaz <jgarcidi@ull.edu.es>", "Daniel Escanez-Exposito <jescanez@ull.edu.es>"]
-description = "Quantum Cryptography library for quantum protocols testing and development."
+description = "Library for the design, simulation and validation of Quantum Cryptography protocols"
+keywords = ["quantum", "cryptography", "simulation", "qkd", "physics"]
+categories = ["science", "cryptography", "simulation"]
+repository = "https://github.com/jorgegardiaz/qcrypto"
 license = "MIT"
 
 [lib]
