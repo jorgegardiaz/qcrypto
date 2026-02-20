@@ -231,10 +231,21 @@ impl QuantumState {
         measurement: &Measurement,
         target_qubits: &[usize],
     ) -> Result<Vec<f64>, StateError> {
+        // Validate measurement qubits with target qubits
+        if measurement.num_qubits != target_qubits.len() {
+            return Err(StateError::DimensionMismatch {
+                expected: measurement.num_qubits,
+                got_rows: target_qubits.len(),
+                got_cols: 0,
+            });
+        }
+
+        // Validate target qubits indexes
         for &q in target_qubits {
             self.validate_qubit_index(q)?;
         }
 
+        // Validate no duplicates in target qubits
         if let Some(dup) = utils::find_duplicate(target_qubits) {
             return Err(StateError::MeasurementError(
                 MeasurementError::DuplicateQubit(dup),
@@ -353,6 +364,20 @@ impl QuantumState {
         // Validate that there are no duplicate qubit indices in the targets
         if let Some(dup) = utils::find_duplicate(target_qubits) {
             return Err(StateError::ChannelError(ChannelError::DuplicateQubit(dup)));
+        }
+
+        // Validate channel qubits with target qubits
+        if channel.num_qubits != target_qubits.len() {
+            return Err(StateError::DimensionMismatch {
+                expected: channel.num_qubits,
+                got_rows: target_qubits.len(),
+                got_cols: 0,
+            });
+        }
+
+        // Validate target qubits indexes
+        for &q in target_qubits {
+            self.validate_qubit_index(q)?;
         }
 
         let dim = self.density_matrix.nrows();
