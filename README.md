@@ -15,7 +15,7 @@
 
 <br />
 
-`qcrypto` is a high-performance, cross-platform library designed for the design, simulation, and validation of Quantum Cryptography protocols.
+`qcrypto` cross-platform Rust library designed for the design, simulation, and validation of Quantum Cryptography protocols.
 
 Unlike general-purpose quantum simulators that focus on state-vector evolution for logical circuits, `qcrypto` is architected around **Density Matrices ($\rho$)** and **Kraus Operators**. This design choice enables the precise simulation of open quantum systems, decoherence, noisy channels, and generalized measurements (POVMs), which are critical for validating the physical security of cryptographic protocols.
 
@@ -66,8 +66,8 @@ The standard protocol for Quantum Key Distribution. The implementation supports:
 
 An implementation of B92 utilizing generalized measurements for **Unambiguous State Discrimination (USD)**.
 
-* **Mechanism:** Constructs the optimal POVM  such that inconclusive results are explicitly handled ().
-* **Yield:** Achieves the theoretical efficiency limit of  for a noiseless channel.
+* **Mechanism:** Constructs the optimal POVM such that inconclusive results are explicitly handled.
+* **Yield:** Achieves the optimal theoretical sifting rate (approx. 29.3% for standard non-orthogonal states), strictly outperforming standard projective measurements in a noiseless channel.
 
 ### 3. QIA-QZKP (Garcia-Diaz et al., 2025)
 
@@ -140,10 +140,14 @@ fn main() -> Result<(), StateError> {
 
 ## References
 
-If you use the QIA-QZKP module in your research, please cite the original paper:
+If you use this software in your research or project, please cite it using the information in [CITATION](CITATION.cff). Additionally, if you use the QIA-QZKP module in your research, please cite the original paper:
 
 > **Garcia-Diaz, J.**, Escanez-Exposito, D., Caballero-Gil, P., & Molina-Gil, J. (2025). *Conjugate Coding Based Designated Verifier Quantum Zero Knowledge Proof for User Authentication*.
 
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request on [GitHub](https://github.com/jorgegardiaz/qcrypto).
