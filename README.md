@@ -17,16 +17,17 @@
 
 `qcrypto` cross-platform Rust library designed for the design, simulation, and validation of Quantum Cryptography protocols.
 
-Unlike general-purpose quantum simulators that focus on state-vector evolution for logical circuits, `qcrypto` is architected around **Density Matrices ($\rho$)** and **Kraus Operators**. This design choice enables the precise simulation of open quantum systems, decoherence, noisy channels, and generalized measurements (POVMs), which are critical for validating the physical security of cryptographic protocols.
+Unlike general-purpose quantum simulators that focus on state-vector evolution for logical circuits, `qcrypto` is architected around **Density Matrices** and **Kraus Operators**. This design choice enables the precise simulation of open quantum systems, decoherence, noisy channels, and generalized measurements (POVMs), which are critical for validating the physical security of cryptographic protocols.
 
 The library is implemented in **100% Safe Rust**, eliminating external dependencies.
 
 ## Key Features
 
 * **Density Matrix Formalism:** Native support for mixed states, enabling the simulation of statistical ensembles and entanglement degradation.
-* **Open Quantum Systems:** Implementation of quantum channels (Bit Flip, Phase Damping, Amplitude Damping, Depolarizing) satisfying the Trace-Preserving condition ($\sum K_i^\dagger K_i = I$).
+* **Open Quantum Systems:** Implementation of quantum channels (Bit Flip, Phase Damping, Amplitude Damping, Depolarizing) satisfying the Trace-Preserving condition.
 * **Generalized Measurements:** Support for Positive Operator-Valued Measures (POVM), essential for protocols like B92 and unambiguous state discrimination.
 * **Efficient Operator Expansion:** Native implementation of optimized algorithms to extend single-qubit operator matrices to multi-qubit composite systems.
+* **Reproducible Simulations:** A Thread-Local RNG system (`qcrypto::rng`) allows researchers to lock simulations to deterministic entropy sequences to exactly replicate experimental protocol runs.
 
 ## Installation
 
@@ -45,10 +46,10 @@ cargo add qcrypto
 
 ### Core Structures
 
-* **`QuantumState`**: Represents the state of the system using **Density Matrices** ($\rho$). Unlike state-vector simulators, this allows for the accurate representation of mixed states, statistical ensembles, and decoherence effects.
-* **`QuantumChannel`**: Models physical noise and decoherence (e.g., Bit Flip, Phase Damping, Amplitude Damping) using **Kraus Operators**. It ensures the evolution is Trace-Preserving by verifying $\sum K_i^\dagger K_i = I$.
+* **`QuantumState`**: Represents the state of the system using **Density Matrices**. Unlike state-vector simulators, this allows for the accurate representation of mixed states, statistical ensembles, and decoherence effects.
+* **`QuantumChannel`**: Models physical noise and decoherence (e.g., Bit Flip, Phase Damping, Amplitude Damping) using **Kraus Operators**. It ensures the evolution is Trace-Preserving by verifying.
 * **`Measurement`**: A generalized measurement framework supporting both standard Projective Measurements (Von Neumann) and **Positive Operator-Valued Measures (POVM)**. This is crucial for implementing optimal discrimination strategies and ambiguous state detection.
-* **`Gate`**: Provides standard unitary operations ($X, Z, H, CNOT, \dots$) and allows for the definition of custom single and multi-qubit unitaries.
+* **`Gate`**: Provides standard unitary operations and allows for the definition of custom single and multi-qubit unitaries.
 
 ## Implemented Protocols
 
@@ -110,7 +111,7 @@ fn main() -> Result<(), StateError> {
 
     println!("Measurement Outcome: {}", outcome.index);
     println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
-    // Purity will be 1 because it has been proyected
+    // Purity will be 1 because it has been proyected to a pure state
 
     Ok(())
 }
@@ -134,6 +135,73 @@ fn main() -> Result<(), StateError> {
     println!("Protocol Accuracy: {:.2}%", result.accuracy * 100.0);
     println!("Authenticated: {}", result.authenticated);
     
+    Ok(())
+}
+```
+
+### Reproducible Simulations (Deterministic RNG)
+
+For testing and research, it is often critical to perfectly reproduce a specific run of a protocol (yielding identical keys and error distributions). `qcrypto` provides a high-performance **Thread-Local Deterministic RNG** that does not require you to pass RNG instances to every function.
+
+```rust
+use qcrypto::protocols::qkd::bbm92;
+use qcrypto::{QuantumChannel, rng::set_global_seed};
+
+fn main() {
+    let channel = QuantumChannel::depolarizing(0.1)?;
+    
+    // Lock the RNG for this thread to a specific seed
+    set_global_seed(42);
+    
+    // Every call to bbm92::run or QuantumState::measure on this thread 
+    // will now be 100% deterministic and reproducible.
+    let result = bbm92::run(1000, &channel, 0.1, 0.2)?;
+    
+    // Running this program tomorrow will yield the exact same QBER and key.
+    println!("Deterministically reproducible QBER: {:.2}%", result.qber);
+}
+```
+
+### Running Multiple Executions and Saving to CSV
+
+For statistical analysis, it is often necessary to run a protocol multiple times across different parameters (e.g., varying noise levels) and store the results.
+
+```rust
+use qcrypto::protocols::qkd::bb84;
+use qcrypto::{QuantumChannel};
+use std::fs::File;
+use std::io::Write;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let num_qubits = 1000;
+    let eve_ratio = 0.0;
+    let check_ratio = 0.2;
+    let num_executions = 50;
+
+    let noise_levels = [0.0, 0.05, 0.10, 0.15];
+
+    // Create a CSV file for output
+    let mut file = File::create("bb84_results.csv")?;
+    writeln!(file, "Noise,Execution,QBER,EstablishedKeyLength")?;
+
+    // Iterate over different noise configurations
+    for &noise in &noise_levels {
+        let channel = QuantumChannel::depolarizing(noise)?;
+
+        // Run the protocol multiple times for each configuration
+        for execution in 1..=num_executions {
+            let result = bb84::run(num_qubits, &channel, eve_ratio, check_ratio)?;
+            
+            // Write the extracted data to the CSV
+            writeln!(
+                file, 
+                "{:.2},{},{:.2},{}", 
+                noise, execution, result.qber, result.established_key.len()
+            )?;
+        }
+    }
+
+    println!("Simulation complete. Data saved to bb84_results.csv");
     Ok(())
 }
 ```
