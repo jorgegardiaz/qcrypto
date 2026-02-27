@@ -1,5 +1,4 @@
 use crate::{Measurement, QuantumChannel, QuantumState, errors::StateError};
-use rand::Rng;
 use std::collections::HashMap;
 
 /// A simulator for sampling quantum states.
@@ -70,10 +69,9 @@ impl Sampler {
 
         // Run Simulation
         let mut raw_counts = vec![0usize; probs.len()];
-        let mut rng = rand::rng();
 
         for _ in 0..num_shots {
-            let r: f64 = rng.random(); // Generates [0.0, 1.0)
+            let r: f64 = crate::rng::random_f64(); // Generates [0.0, 1.0)
 
             // Determine outcome index based on CDF
             let mut outcome_idx = 0;

@@ -5,8 +5,6 @@
 //! photon pulses prepared by Alice.
 
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
-use rand::Rng;
-use rand::seq::SliceRandom;
 
 /// The result of the BBM92 protocol execution.
 pub struct Bbm92Result {
@@ -54,8 +52,6 @@ pub fn run(
     eve_ratio: f64,
     check_ratio: f64,
 ) -> Result<Bbm92Result, StateError> {
-    let mut rng = rand::rng();
-
     let mut alice_bits = Vec::with_capacity(num_pairs);
     let mut alice_bases = Vec::with_capacity(num_pairs);
     let mut bob_bases = Vec::with_capacity(num_pairs);
@@ -72,9 +68,9 @@ pub fn run(
         state.apply_channel(channel, &[1])?;
 
         // Eavesdropper intercepts
-        if eve_ratio > 1e-9 && rng.random_bool(eve_ratio) {
+        if eve_ratio > 1e-9 && crate::rng::random_bool(eve_ratio) {
             eve_detected_count += 1;
-            let e_basis = rng.random_bool(0.5);
+            let e_basis = crate::rng::random_bool(0.5);
             let measurement = if e_basis {
                 Measurement::x_basis()
             } else {
@@ -85,7 +81,7 @@ pub fn run(
         }
 
         // Alice measures
-        let a_basis = rng.random_bool(0.5);
+        let a_basis = crate::rng::random_bool(0.5);
         let a_measurement = if a_basis {
             Measurement::x_basis()
         } else {
@@ -97,7 +93,7 @@ pub fn run(
         let a_bit = res_a.index == 1;
 
         //Bob measures his qubit
-        let b_basis = rng.random_bool(0.5);
+        let b_basis = crate::rng::random_bool(0.5);
         let b_measurement = if b_basis {
             Measurement::x_basis()
         } else {
@@ -124,7 +120,7 @@ pub fn run(
     let total_sifted = match_indices.len();
 
     // 2. Shuffle indices
-    match_indices.shuffle(&mut rng);
+    crate::rng::shuffle_slice(&mut match_indices);
 
     // 3. Split into check and key indices
     let num_check = (total_sifted as f64 * check_ratio).round() as usize;
@@ -139,7 +135,7 @@ pub fn run(
     }
 
     let qber = if num_check > 0 {
-        (check_errors as f64 / num_check as f64) * 100.0
+        check_errors as f64 / num_check as f64
     } else {
         0.0
     };

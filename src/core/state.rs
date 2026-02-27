@@ -1,11 +1,7 @@
-use crate::QuantumChannel;
-use crate::core::Gate;
 use crate::core::errors::{ChannelError, MeasurementError, StateError};
-use crate::core::utils;
-use crate::{Measurement, MeasurementResult};
+use crate::{Gate, Measurement, MeasurementResult, QuantumChannel, core::utils};
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
-use rand::Rng;
 use rayon::prelude::*;
 
 /// Represents a quantum state using density matrices.
@@ -293,8 +289,7 @@ impl QuantumState {
 
     /// Randomly selects operator index ponderating using `probs`
     fn pick_outcome(&self, probs: &[f64]) -> usize {
-        let mut rng = rand::rng();
-        let roll: f64 = rng.random();
+        let roll: f64 = crate::rng::random_f64();
 
         let mut cumulative = 0.0;
         for (i, &p) in probs.iter().enumerate() {

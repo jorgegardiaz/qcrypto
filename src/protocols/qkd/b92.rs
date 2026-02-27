@@ -9,8 +9,6 @@ use crate::{
 };
 use ndarray::{Array2, arr2};
 use num_complex::Complex64;
-use rand::Rng;
-use rand::seq::SliceRandom;
 
 /// The result of the B92 protocol execution.
 pub struct B92Result {
@@ -58,8 +56,6 @@ pub fn run(
     eve_ratio: f64,
     check_ratio: f64,
 ) -> Result<B92Result, StateError> {
-    let mut rng = rand::rng();
-
     // Bob's POVM
     let bob_device = measurement;
 
@@ -69,7 +65,7 @@ pub fn run(
 
     for _ in 0..num_qubits {
         // Alice prepare qubit
-        let a_bit = rng.random_bool(0.5);
+        let a_bit = crate::rng::random_bool(0.5);
         let mut state = QuantumState::new(1);
 
         if a_bit {
@@ -80,9 +76,9 @@ pub fn run(
         state.apply_channel(channel, &[0])?;
 
         // Eavesdropper intercepts
-        if eve_ratio > 1e-12 && rng.random_bool(eve_ratio) {
+        if eve_ratio > 1e-12 && crate::rng::random_bool(eve_ratio) {
             eve_intercepted_count += 1;
-            let e_basis = rng.random_bool(0.5);
+            let e_basis = crate::rng::random_bool(0.5);
             let m = if e_basis {
                 Measurement::x_basis()
             } else {
@@ -121,7 +117,7 @@ pub fn run(
     let total_conclusive = conclusive_indices.len();
 
     // 2. Shuffle indices to randomly select bits for error checking
-    conclusive_indices.shuffle(&mut rng);
+    crate::rng::shuffle_slice(&mut conclusive_indices);
 
     // 3. Split into check bits and key bits
     let num_check = (total_conclusive as f64 * check_ratio).round() as usize;
@@ -138,7 +134,7 @@ pub fn run(
     }
 
     let qber = if num_check > 0 {
-        (check_errors as f64 / num_check as f64) * 100.0
+        check_errors as f64 / num_check as f64
     } else {
         0.0
     };

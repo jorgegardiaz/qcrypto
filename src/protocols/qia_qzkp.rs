@@ -4,7 +4,6 @@
 //! a prover to demonstrate his identity without revealing information about his secret.
 
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
-use rand::Rng;
 
 /// The result of the QIA-QZKP protocol execution.
 pub struct QiaQZKPResult {
@@ -49,9 +48,9 @@ pub fn run(
     channel: &QuantumChannel,
     acceptance_threshold: f64,
 ) -> Result<QiaQZKPResult, StateError> {
-    let mut rng = rand::rng();
-
-    let a: Vec<bool> = (0..num_qubits).map(|_| rng.random_bool(0.5)).collect();
+    let a: Vec<bool> = (0..num_qubits)
+        .map(|_| crate::rng::random_bool(0.5))
+        .collect();
 
     let mut b_vec = Vec::with_capacity(num_qubits);
     let mut c_vec = Vec::with_capacity(num_qubits);
@@ -60,7 +59,7 @@ pub fn run(
 
     for &a_bit in &a {
         // Alice's commitment
-        let b_bit = rng.random_bool(0.5);
+        let b_bit = crate::rng::random_bool(0.5);
         b_vec.push(b_bit);
 
         // Sends (a XOR b) to Bob. Bob obtains 'b' using 'a'.
@@ -77,7 +76,7 @@ pub fn run(
         }
 
         // Bob generats random challenge 'c'
-        let c_bit = rng.random_bool(0.5);
+        let c_bit = crate::rng::random_bool(0.5);
         c_vec.push(c_bit);
 
         // Bob modifies |psi> to create the challenge state |psi'>

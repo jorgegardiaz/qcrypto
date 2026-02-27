@@ -339,6 +339,7 @@ dependencies = [
  "ndarray",
  "num-complex",
  "rand",
+ "rand_chacha",
  "rayon",
  "thiserror",
 ]
