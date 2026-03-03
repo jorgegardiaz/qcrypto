@@ -48,8 +48,9 @@ cargo add qcrypto
 
 * **`QuantumState`**: Represents the state of the system using **Density Matrices**. Unlike state-vector simulators, this allows for the accurate representation of mixed states, statistical ensembles, and decoherence effects.
 * **`QuantumChannel`**: Models physical noise and decoherence (e.g., Bit Flip, Phase Damping, Amplitude Damping) using **Kraus Operators**. It ensures the evolution is Trace-Preserving by verifying.
-* **`Measurement`**: A generalized measurement framework supporting both standard Projective Measurements (Von Neumann) and **Positive Operator-Valued Measures (POVM)**. This is crucial for implementing optimal discrimination strategies and ambiguous state detection.
+* **`Measurement`**: A generalized measurement framework supporting both standard Projective Measurements and **Positive Operator-Valued Measures (POVM)**. This is crucial for implementing optimal discrimination strategies and ambiguous state detection.
 * **`Gate`**: Provides standard unitary operations and allows for the definition of custom single and multi-qubit unitaries.
+* **`Sampler`**: Permits to run multiple shots of measurements using a `Measurement` and `QuantumChannel`.
 
 ## Implemented Protocols
 
@@ -65,7 +66,7 @@ The standard protocol for Quantum Key Distribution. The implementation supports:
 
 ### 2. B92 (Bennett, 1992) with Optimal POVM
 
-An implementation of B92 utilizing generalized measurements for **Unambiguous State Discrimination (USD)**.
+An implementation of B92 utilizing generalized measurements for **Unambiguous State Discrimination**.
 
 * **Mechanism:** Constructs the optimal POVM such that inconclusive results are explicitly handled.
 * **Yield:** Achieves the optimal theoretical sifting rate (approx. 29.3% for standard non-orthogonal states), strictly outperforming standard projective measurements in a noiseless channel.
@@ -89,9 +90,9 @@ This protocol establishes a Quantum Zero-Knowledge Proof (QZKP) for identity aut
 ### Simulating a Noisy Channel with Density Matrices
 
 ```rust
-use qcrypto::{QuantumState, Gate, Measurement, QuantumChannel, errors::StateError};
+use qcrypto::{QuantumState, Gate, Measurement, QuantumChannel, errors::*};
 
-fn main() -> Result<(), StateError> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Initialize a pure qubit state |0><0|
     let mut rho = QuantumState::new(1);
 
@@ -121,9 +122,9 @@ fn main() -> Result<(), StateError> {
 
 ```rust
 use qcrypto::protocols::qia_qzkp;
-use qcrypto::{QuantumChannel, errors::StateError};
+use qcrypto::{QuantumChannel, errors::*};
 
-fn main() -> Result<(), StateError> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let n_qubits = 1024;
     let threshold = 0.85; // Acceptance threshold based on expected QBER
     
@@ -168,7 +169,7 @@ For statistical analysis, it is often necessary to run a protocol multiple times
 
 ```rust
 use qcrypto::protocols::qkd::bb84;
-use qcrypto::{QuantumChannel};
+use qcrypto::{QuantumChannel, errors::*};
 use std::fs::File;
 use std::io::Write;
 
