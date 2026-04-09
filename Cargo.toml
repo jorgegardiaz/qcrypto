@@ -1,11 +1,11 @@
 [package]
 name = "qcrypto"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 authors = ["Jorge Garcia-Diaz <jgarcidi@ull.edu.es>", "Daniel Escanez-Exposito <jescanez@ull.edu.es>"]
 description = "Library for the design, simulation and validation of Quantum Cryptography protocols"
 keywords = ["quantum", "cryptography", "simulation", "qkd", "physics"]
-categories = ["science", "cryptography", "simulation"]
+categories = ["cryptography", "simulation", "science"]
 repository = "https://github.com/jorgegardiaz/qcrypto"
 readme = "README.md"
 license = "MIT"

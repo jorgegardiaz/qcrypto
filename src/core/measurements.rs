@@ -134,7 +134,7 @@ impl Measurement {
         targets: &[usize],
     ) -> Result<Vec<Array2<Complex64>>, MeasurementError> {
         if targets.len() != self.num_qubits {
-            return Err(MeasurementError::InvalidDimensions); // O crea un error TargetMismatch
+            return Err(MeasurementError::InvalidDimensions); // Or create a TargetMismatch error
         }
 
         let mut expanded_ops = Vec::with_capacity(self.operators.len());

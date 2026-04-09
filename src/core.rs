@@ -18,4 +18,5 @@ pub mod utils;
 pub use channels::QuantumChannel;
 pub use gates::Gate;
 pub use measurements::{Measurement, MeasurementResult};
-pub use state::QuantumState;
+pub use state::{QuantumState, StateDensityMatrix, StateVector};
+

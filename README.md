@@ -17,16 +17,16 @@
 
 `qcrypto` cross-platform Rust library designed for the design, simulation, and validation of Quantum Cryptography protocols.
 
-Unlike general-purpose quantum simulators that focus on state-vector evolution for logical circuits, `qcrypto` is architected around **Density Matrices** and **Kraus Operators**. This design choice enables the precise simulation of open quantum systems, decoherence, noisy channels, and generalized measurements (POVMs), which are critical for validating the physical security of cryptographic protocols.
+Unlike general-purpose quantum simulators that strictly focus on state-vector evolution for logical circuits, `qcrypto` implements an intelligent **Dual-State Architecture**. It dynamically switches between highly-efficient **State Vectors** for pure states and robust **Density Matrices** when open quantum systems, decoherence, or noisy channels are introduced. This design choice enables both high-performance execution of unitary logical circuits and the precise simulation of generalized measurements (POVMs) and hardware vulnerabilities.
 
 The library is implemented in **100% Safe Rust**, eliminating external dependencies.
 
 ## Key Features
 
-* **Density Matrix Formalism:** Native support for mixed states, enabling the simulation of statistical ensembles and entanglement degradation.
+* **Dual-State Formalism:** Automatic transparent conversion from `StateVector` ($O(2^N)$ memory) to `StateDensityMatrix` ($O(4^N)$ memory) exactly only when a non-unitary noisy channel is applied.
 * **Open Quantum Systems:** Implementation of quantum channels (Bit Flip, Phase Damping, Amplitude Damping, Depolarizing) satisfying the Trace-Preserving condition.
 * **Generalized Measurements:** Support for Positive Operator-Valued Measures (POVM), essential for protocols like B92 and unambiguous state discrimination.
-* **Efficient Operator Expansion:** Native implementation of optimized algorithms to extend single-qubit operator matrices to multi-qubit composite systems.
+* **Efficient Operator Expansion:** Native implementation of optimized algorithms avoiding global matrix expansion to perform local tensor updates mathematically.
 * **Reproducible Simulations:** A Thread-Local RNG system (`qcrypto::rng`) allows researchers to lock simulations to deterministic entropy sequences to exactly replicate experimental protocol runs.
 
 ## Installation
@@ -42,12 +42,12 @@ cargo add qcrypto
 
 ## Library Architecture
 
-`qcrypto` is built upon a mathematically rigorous foundation, avoiding common simplifications found in other simulators. The core components are designed to handle open quantum systems and mixed states natively.
+`qcrypto` is built upon a mathematically rigorous foundation, avoiding common simplifications found in other simulators. The core components are designed to efficiently handle both pure unitary logic and mixed states natively.
 
 ### Core Structures
 
-* **`QuantumState`**: Represents the state of the system using **Density Matrices**. Unlike state-vector simulators, this allows for the accurate representation of mixed states, statistical ensembles, and decoherence effects.
-* **`QuantumChannel`**: Models physical noise and decoherence (e.g., Bit Flip, Phase Damping, Amplitude Damping) using **Kraus Operators**. It ensures the evolution is Trace-Preserving by verifying.
+* **`QuantumState`**: An intelligent `enum` that transparently encapsulates either a **`StateVector`** or a **`StateDensityMatrix`**. For efficiency, fresh algorithms execute utilizing pure vectors and intelligently cast themselves into density traces ONLY when entangled with an environment via a quantum noise channel.
+* **`QuantumChannel`**: Models physical noise and decoherence (e.g., Bit Flip, Phase Damping, Amplitude Damping) using **Kraus Operators**. It ensures the evolution is Trace-Preserving.
 * **`Measurement`**: A generalized measurement framework supporting both standard Projective Measurements and **Positive Operator-Valued Measures (POVM)**. This is crucial for implementing optimal discrimination strategies and ambiguous state detection.
 * **`Gate`**: Provides standard unitary operations and allows for the definition of custom single and multi-qubit unitaries.
 * **`Sampler`**: Permits to run multiple shots of measurements using a `Measurement` and `QuantumChannel`.
@@ -112,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Measurement Outcome: {}", outcome.index);
     println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
-    // Purity will be 1 because it has been proyected to a pure state
+    // Purity will be 1.0 because it has been projected to a pure state
 
     Ok(())
 }

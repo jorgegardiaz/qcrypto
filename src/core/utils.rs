@@ -73,10 +73,10 @@ pub fn expand_operator(
     }
     // Bits that are not target (do not change)
     let passive_mask = !target_mask;
-    // Itereation over every column, each column corrrespond to a basic state
+    // Iterate over every column, each column corresponding to a basic state
     for col_idx in 0..dim {
-        // If NOT ALL control qubits are 1 in the associated sate to the column
-        // This checks if the state associeted to the column is affected by the matrix
+        // If NOT ALL control qubits are 1 in the associated state applied to the column
+        // This checks if the state associated to the column is affected by the matrix
         if (col_idx & control_mask) != control_mask {
             // This basic state is not affected by the matrix -> 1 in diagonal
             full_matrix[[col_idx, col_idx]] = Complex64::new(1.0, 0.0);
@@ -84,9 +84,9 @@ pub fn expand_operator(
         }
         // If ALL control qubits are 1 in the associated sate to the column
         // This means the basic state associated to the column is affected by the matrix
-        // We extract the bits of col_idx in the positions of targets
+        // We extract the bits of col_idx in the positions of the targets
         let small_col = extract_bits(col_idx, targets);
-        // Itereation over the rows of the matrix applied to the subsystem of the target qubits
+        // Iterate over the rows of the matrix applied to the subsystem of the target qubits
         for small_row in 0..matrix.nrows() {
             // Get the value of the matrix in the position associated to the iteration
             let val = matrix[[small_row, small_col]];
@@ -107,7 +107,7 @@ pub fn expand_operator(
     full_matrix
 }
 
-/// Extracs the bits in positions `indices` of the sequence `value`
+/// Extracts the bits in the positions specified by `indices` from the sequence `value`
 fn extract_bits(value: usize, indices: &[usize]) -> usize {
     let mut result = 0;
     for (i, &pos) in indices.iter().enumerate() {
@@ -406,4 +406,57 @@ pub fn apply_local_right(
     }
 
     new_rho
+}
+
+/// Applies a local quantum operator to a state vector.
+pub fn apply_local_vector(
+    num_total_qubits: usize,
+    psi: &Array1<Complex64>,
+    local_matrix: &Array2<Complex64>,
+    targets: &[usize],
+    controls: &[usize],
+) -> Array1<Complex64> {
+    let dim = 1 << num_total_qubits;
+    let mut new_psi = Array1::<Complex64>::zeros(dim);
+
+    let mut control_mask = 0usize;
+    for &c in controls {
+        control_mask |= 1 << c;
+    }
+
+    let mut target_mask = 0usize;
+    for &t in targets {
+        target_mask |= 1 << t;
+    }
+
+    let passive_mask = !target_mask;
+    let k_dim = 1 << targets.len();
+
+    // In a state vector representation, left multiplication by an operator M is:
+    // (M |psi>)_i = sum_j M_{ij} psi_j
+    // where 'row' maps to 'i', and 'j' is constructed by iterating over small_col.
+    for row in 0..dim {
+        if (row & control_mask) != control_mask {
+            new_psi[row] = psi[row];
+            continue;
+        }
+
+        let small_row = extract_bits(row, targets);
+        let mut sum = Complex64::new(0.0, 0.0);
+
+        for small_col in 0..k_dim {
+            let val = local_matrix[[small_row, small_col]];
+
+            if val.norm_sqr() < f64::EPSILON {
+                continue;
+            }
+
+            let m = (row & passive_mask) | deposit_bits(small_col, targets);
+            sum += val * psi[m];
+        }
+
+        new_psi[row] = sum;
+    }
+
+    new_psi
 }
