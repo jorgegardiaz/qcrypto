@@ -211,7 +211,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 If you use this software in your research or project, please cite it using the information in [CITATION](CITATION.cff). Additionally, if you use the QIA-QZKP module in your research, please cite the original paper:
 
-> **Garcia-Diaz, J.**, Escanez-Exposito, D., Caballero-Gil, P., & Molina-Gil, J. (2025). *Conjugate Coding Based Designated Verifier Quantum Zero Knowledge Proof for User Authentication*.
+> Garcia-Diaz, J., Escanez-Exposito, D., Caballero-Gil, P. et al. Conjugate coding based designated verifier quantum zero knowledge proof for user authentication. Cryptogr. Commun. (2026). https://doi.org/10.1007/s12095-026-00878-y
 
 ## License
 
