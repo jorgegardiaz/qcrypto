@@ -11,7 +11,7 @@
   [![Docs](https://docs.rs/qcrypto/badge.svg)](https://docs.rs/qcrypto)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
   [![Rust CI](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml/badge.svg)](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml)
-  ![Coverage](./.github/badges/coverage.svg)
+  ![Coverage](https://raw.githubusercontent.com/jorgegardiaz/qcrypto/master/.github/badges/coverage.svg)
 
 </div>
 
