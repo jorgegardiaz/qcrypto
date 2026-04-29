@@ -45,7 +45,22 @@ pub struct Bbm92Result {
 ///
 /// # Returns
 ///
-/// A `Bbm92Result` with the simulation statistics and keys.
+/// A `Result` containing `Bbm92Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::bbm92;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.0);
+/// let result = bbm92::run(100, &channel, 0.0, 0.5).unwrap();
+///
+/// assert_eq!(result.raw_length, 100);
+/// ```
 pub fn run(
     num_pairs: usize,
     channel: &QuantumChannel,
@@ -158,4 +173,36 @@ pub fn run(
         bob_results,
         established_key,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bbm92_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(100, &channel, 0.0, 0.5).unwrap();
+
+        assert_eq!(result.raw_length, 100);
+        assert_eq!(result.check_errors, 0);
+        assert_eq!(result.qber, 0.0);
+        assert_eq!(result.eve_detected_count, 0);
+    }
+
+    #[test]
+    fn test_bbm92_eve() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(100, &channel, 1.0, 0.5).unwrap();
+
+        assert!(result.eve_detected_count > 0);
+        assert!(result.qber > 0.0);
+    }
+
+    #[test]
+    fn test_bbm92_zero_check() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(100, &channel, 0.0, 0.0).unwrap();
+        assert_eq!(result.qber, 0.0);
+    }
 }

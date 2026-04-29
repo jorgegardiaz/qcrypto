@@ -15,6 +15,8 @@ pub mod rng;
 mod sampler;
 
 pub use crate::core::{
-    Gate, Measurement, MeasurementResult, QuantumChannel, QuantumState, StateDensityMatrix, StateVector, errors, utils,
+    Gate, Measurement, MeasurementResult, QuantumChannel, QuantumState, errors, utils,
 };
+
+pub use crate::core::state;
 pub use crate::sampler::Sampler;

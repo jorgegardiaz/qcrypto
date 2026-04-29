@@ -48,7 +48,23 @@ pub struct B92Result {
 ///
 /// # Returns
 ///
-/// A `B92Result` with the simulation statistics and keys.
+/// A `Result` containing `B92Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::b92;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.0);
+/// let measurement = b92::build_optimal_povm_b92().unwrap();
+/// let result = b92::run(100, &channel, &measurement, 0.0, 0.5).unwrap();
+///
+/// assert_eq!(result.raw_length, 100);
+/// ```
 pub fn run(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -164,7 +180,23 @@ pub fn run(
 /// - $E_1$: Detects state $|+\rangle$ (implies bit 1 sent).
 /// - $E_2$: Detects state $|0\rangle$ (implies bit 0 sent).
 /// - $E_3$: Inconclusive result.
-pub fn build_optimal_povm() -> Result<Measurement, MeasurementError> {
+///
+/// # Returns
+///
+/// A `Result` containing the `Measurement` POVM.
+///
+/// # Errors
+///
+/// Returns a `MeasurementError` if the POVM elements are invalid.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::b92;
+///
+/// let povm = b92::build_optimal_povm_b92().unwrap();
+/// assert_eq!(povm.operators.len(), 3);
+/// ```
+pub fn build_optimal_povm_b92() -> Result<Measurement, MeasurementError> {
     let zero = Complex64::new(0.0, 0.0);
     let sqrt2 = 2.0_f64.sqrt();
 
@@ -184,4 +216,39 @@ pub fn build_optimal_povm() -> Result<Measurement, MeasurementError> {
     let e3 = identity - &e1 - &e2;
 
     Measurement::from_povm(vec![e1, e2, e3], vec![1.0, 0.0, -1.0])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_b92_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run(100, &channel, &measurement, 0.0, 0.5).unwrap();
+
+        assert_eq!(result.raw_length, 100);
+        assert_eq!(result.check_errors, 0);
+        assert_eq!(result.qber, 0.0);
+        assert_eq!(result.eve_detected_count, 0);
+    }
+
+    #[test]
+    fn test_b92_eve() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run(100, &channel, &measurement, 1.0, 0.5).unwrap();
+
+        assert!(result.eve_detected_count > 0);
+        assert!(result.qber > 0.0);
+    }
+
+    #[test]
+    fn test_b92_zero_check() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run(100, &channel, &measurement, 0.0, 0.0).unwrap();
+        assert_eq!(result.qber, 0.0);
+    }
 }

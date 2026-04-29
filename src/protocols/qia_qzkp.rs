@@ -38,11 +38,22 @@ pub struct QiaQZKPResult {
 ///
 /// # Returns
 ///
-/// A `QiaQZKPResult` containing the details of the protocol execution.
+/// A `Result` containing `QiaQZKPResult` with the details of the protocol execution.
 ///
 /// # Errors
 ///
 /// Returns `StateError` if any quantum operation fails.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::qia_qzkp;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.0);
+/// let result = qia_qzkp::run(100, &channel, 0.9).unwrap();
+///
+/// assert!(result.authenticated);
+/// ```
 pub fn run(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -145,4 +156,29 @@ pub fn run(
         bob_challenge_c: c_vec,
         bob_recovered_c: c_recovered_vec,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_qia_qzkp_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(100, &channel, 0.9).unwrap();
+
+        assert_eq!(result.total_qubits, 100);
+        assert_eq!(result.matches, 100);
+        assert_eq!(result.accuracy, 1.0);
+        assert!(result.authenticated);
+    }
+
+    #[test]
+    fn test_qia_qzkp_noise_rejection() {
+        let channel = QuantumChannel::bit_flip(1.0); // Extreme noise
+        // This should cause enough errors to drop below the 0.9 threshold
+        let result = run(100, &channel, 0.9).unwrap();
+
+        assert!(!result.authenticated);
+    }
 }

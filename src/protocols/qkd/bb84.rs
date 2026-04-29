@@ -45,7 +45,22 @@ pub struct BB84Result {
 ///
 /// # Returns
 ///
-/// A `BB84Result` with the simulation statistics and keys.
+/// A `Result` containing `BB84Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail (e.g. invalid dimensions).
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::bb84;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.0);
+/// let result = bb84::run(100, &channel, 0.0, 0.5).unwrap();
+///
+/// assert_eq!(result.raw_length, 100);
+/// ```
 pub fn run(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -157,4 +172,38 @@ pub fn run(
         bob_bases,
         bob_results,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bb84_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(100, &channel, 0.0, 0.5).unwrap();
+
+        assert_eq!(result.raw_length, 100);
+        assert_eq!(result.check_errors, 0);
+        assert_eq!(result.qber, 0.0);
+        assert_eq!(result.eve_detected_count, 0);
+    }
+
+    #[test]
+    fn test_bb84_eve() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        // Eve intercepts everything
+        let result = run(100, &channel, 1.0, 0.5).unwrap();
+
+        // Eve should introduce errors
+        assert!(result.eve_detected_count > 0);
+        assert!(result.qber > 0.0);
+    }
+
+    #[test]
+    fn test_bb84_zero_check() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(100, &channel, 0.0, 0.0).unwrap();
+        assert_eq!(result.qber, 0.0);
+    }
 }
