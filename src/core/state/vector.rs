@@ -1,5 +1,9 @@
 use crate::core::errors::{MeasurementError, StateError};
-use crate::{Gate, Measurement, MeasurementResult, core::utils};
+use crate::core::state::density::StateDensityMatrix;
+use crate::core::state::{
+    GateApplicable, Measurable, PurityComputable, QuantumStateImpl, Validatable,
+};
+use crate::{Gate, Measurement, MeasurementResult, QuantumChannel, core::utils};
 use ndarray::Array1;
 use num_complex::Complex64;
 use rayon::prelude::*;
@@ -19,6 +23,32 @@ impl StateVector {
     /// # Arguments
     ///
     /// * `num_qubits` - The number of qubits in the system.
+    ///
+    /// # Returns
+    ///
+    /// A new `StateVector` instance.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use qcrypto::state::StateVector;
+    /// # use num_complex::Complex64;
+    ///
+    /// // Initialize a 2-qubit state
+    /// let state = StateVector::new(2);
+    ///
+    /// // Verify qubit count
+    /// assert_eq!(state.num_qubits, 2);
+    ///
+    /// // 2 qubits means the state vector dimension should be 2^2 (4)
+    /// assert_eq!(state.amplitudes.dim(), 4);
+    ///
+    /// // The state is |00>
+    /// for (i, &val) in state.amplitudes.indexed_iter() {
+    ///     let expected = if i == 0 { 1.0 } else { 0.0 };
+    ///     assert_eq!(val, Complex64::new(expected, 0.0));
+    /// }
+    /// ```
     pub fn new(num_qubits: usize) -> Self {
         let dim = 1 << num_qubits;
         let mut amplitudes = Array1::<Complex64>::zeros(dim);
@@ -58,7 +88,23 @@ impl StateVector {
         Ok(())
     }
 
-    /// Checks if the current state vector is mathematically valid (normalized to 1.0).
+    /// Checks if the underlying vector state holds mathematical validity properties.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` indicating success `Ok(())` if the state is normalized and dimensions are valid.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StateError` if dimensions are not a power of 2 or the state vector is not normalized to 1.0.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::state::StateVector;
+    ///
+    /// let state = StateVector::new(2);
+    /// assert!(state.is_valid().is_ok());
+    /// ```
     pub fn is_valid(&self) -> Result<(), StateError> {
         Self::check_vector_state(&self.amplitudes)
     }
@@ -69,8 +115,31 @@ impl StateVector {
     ///
     /// * `gate` - The quantum gate to apply.
     /// * `target_qubits` - The indices of the qubits the gate acts upon.
-    pub fn apply(&mut self, gate: &Gate, target_qubits: &[usize]) -> Result<(), StateError> {
-        self.apply_controlled(gate, target_qubits, None)
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a mutable reference to `Self` (`&mut Self`) to allow method chaining.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StateError` if target qubits are out of bounds or the gate dimension mismatches.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::{state::StateVector, Gate};
+    /// # use num_complex::Complex64;
+    ///
+    /// let mut state = StateVector::new(1); // |0>
+    ///
+    /// // Apply NOT gate
+    /// state.apply(&Gate::x(), &[0]).unwrap();
+    ///
+    /// // Now it should be |1>
+    /// assert_eq!(state.amplitudes[1], Complex64::new(1.0, 0.0));
+    /// assert_eq!(state.amplitudes[0], Complex64::new(0.0, 0.0));
+    /// ```
+    pub fn apply(&mut self, gate: &Gate, target_qubits: &[usize]) -> Result<&mut Self, StateError> {
+        self.apply_controlled(gate, target_qubits, &[])
     }
 
     /// Applies a controlled quantum gate to the specified target qubits.
@@ -82,13 +151,39 @@ impl StateVector {
     ///
     /// * `gate` - The quantum gate to apply.
     /// * `target_qubits` - The indices of the target qubits.
-    /// * `control_qubits` - Optional slice with the indices of the control qubits.
+    /// * `control_qubits` - Slice with the indices of the control qubits (empty if none).
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing a mutable reference to `Self` (`&mut Self`) to allow method chaining.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StateError` if target/control qubits are out of bounds or the gate dimension mismatches.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::{state::StateVector, Gate};
+    /// # use num_complex::Complex64;
+    ///
+    /// let mut state = StateVector::new(2);
+    ///
+    /// // Apply X gate to qubit 0 and CNOT -> |11>
+    /// state.apply(&Gate::x(), &[0]).unwrap()
+    ///      .apply_controlled(&Gate::x(), &[1], &[0]).unwrap();
+    ///
+    /// // The state vector for |11> should have a 1.0 at index 3 and 0.0 elsewhere
+    /// for (i, &val) in state.amplitudes.indexed_iter() {
+    ///     let expected = if i == 3 { 1.0 } else { 0.0 };
+    ///     assert_eq!(val, Complex64::new(expected, 0.0));
+    /// }
+    /// ```
     pub fn apply_controlled(
         &mut self,
         gate: &Gate,
         target_qubits: &[usize],
-        control_qubits: Option<&[usize]>,
-    ) -> Result<(), StateError> {
+        control_qubits: &[usize],
+    ) -> Result<&mut Self, StateError> {
         if gate.num_qubits != target_qubits.len() {
             return Err(StateError::DimensionMismatch {
                 expected: gate.num_qubits,
@@ -101,8 +196,7 @@ impl StateVector {
             self.validate_qubit_index(q)?;
         }
 
-        let controls = control_qubits.unwrap_or(&[]);
-        for &q in controls {
+        for &q in control_qubits {
             self.validate_qubit_index(q)?;
         }
 
@@ -112,10 +206,10 @@ impl StateVector {
             &self.amplitudes,
             &gate.matrix,
             target_qubits,
-            controls,
+            control_qubits,
         );
 
-        Ok(())
+        Ok(self)
     }
 
     /// Calculates measurement outcome probabilities without collapsing the state.
@@ -130,7 +224,22 @@ impl StateVector {
     ///
     /// # Returns
     ///
-    /// A vector containing the floating point probability mapping to each measurement operator.
+    /// A `Result` containing a `Vec<f64>` mapping probability to each measurement operator.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StateError` if the measurement dimensions or target qubits are invalid.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::{state::StateVector, Measurement};
+    ///
+    /// let state = StateVector::new(1); // |0>
+    ///
+    /// // Probabilities of measuring in Z basis
+    /// let probs = state.set_measurement(&Measurement::z_basis(), &[0]).unwrap();
+    /// assert_eq!(probs, vec![1.0, 0.0]); // 100% |0>, 0% |1>
+    /// ```
     pub fn set_measurement(
         &self,
         measurement: &Measurement,
@@ -197,7 +306,7 @@ impl StateVector {
     /// Performs a physical measurement, collapsing the quantum state.
     ///
     /// The collapse maps the quantum state according to the formula: $|\psi\rangle \to \frac{M_k |\psi\rangle}{\sqrt{p_k}}$.
-    /// 
+    ///
     /// # Arguments
     ///
     /// * `measurement` - The `Measurement` operation to perform.
@@ -205,7 +314,22 @@ impl StateVector {
     ///
     /// # Returns
     ///
-    /// A `MeasurementResult` tracking both the index of the outcome operator alongside its generic value.
+    /// A `Result` containing a `MeasurementResult` tracking both the index of the outcome operator alongside its generic value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StateError` if measurement dimensions or target qubits are invalid, or if the resulting trace is 0.0.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::{state::StateVector, Measurement};
+    ///
+    /// let mut state = StateVector::new(1); // |0>
+    ///
+    /// // Measure in Z basis
+    /// let result = state.measure(&Measurement::z_basis(), &[0]).unwrap();
+    /// assert_eq!(result.value, 0.0); // Output should correspond to |0>
+    /// ```
     pub fn measure(
         &mut self,
         measurement: &Measurement,
@@ -244,6 +368,25 @@ impl StateVector {
     /// # Arguments
     ///
     /// * `ancilla_state` - Another `StateVector` to append to the system via Kronecker product.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the combined new `StateVector`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `StateError` if tensor operations fail (though typical structural constraints prevent this).
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::state::StateVector;
+    ///
+    /// let state1 = StateVector::new(1);
+    /// let state2 = StateVector::new(2);
+    ///
+    /// let combined = state1.compose(&state2).unwrap();
+    /// assert_eq!(combined.num_qubits, 3);
+    /// ```
     pub fn compose(&self, ancilla_state: &StateVector) -> Result<StateVector, StateError> {
         // Kronecker product for 1D arrays
         let n = self.amplitudes.len();
@@ -264,9 +407,331 @@ impl StateVector {
 
     /// Extrapolates the purity of a `StateVector`.
     ///
-    /// Since state vectors only represent fully pure mathematical quantum states, 
+    /// Since state vectors only represent fully pure mathematical quantum states,
     /// this function will always return `1.0`.
+    ///
+    /// # Returns
+    ///
+    /// The purity as a `f64` (always 1.0).
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::state::StateVector;
+    ///
+    /// let state = StateVector::new(1);
+    /// assert_eq!(state.purity(), 1.0);
+    /// ```
     pub fn purity(&self) -> f64 {
         1.0
+    }
+}
+
+impl Validatable for StateVector {
+    fn is_valid(&self) -> Result<(), StateError> {
+        self.is_valid()
+    }
+}
+
+impl GateApplicable for StateVector {
+    fn apply(&mut self, gate: &Gate, target_qubits: &[usize]) -> Result<(), StateError> {
+        self.apply(gate, target_qubits)?;
+        Ok(())
+    }
+
+    fn apply_controlled(
+        &mut self,
+        gate: &Gate,
+        target_qubits: &[usize],
+        control_qubits: &[usize],
+    ) -> Result<(), StateError> {
+        self.apply_controlled(gate, target_qubits, control_qubits)?;
+        Ok(())
+    }
+}
+
+impl Measurable for StateVector {
+    fn set_measurement(
+        &self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+    ) -> Result<Vec<f64>, StateError> {
+        self.set_measurement(measurement, target_qubits)
+    }
+
+    fn measure(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+    ) -> Result<MeasurementResult, StateError> {
+        self.measure(measurement, target_qubits)
+    }
+}
+
+impl PurityComputable for StateVector {
+    fn purity(&self) -> f64 {
+        self.purity()
+    }
+}
+
+impl QuantumStateImpl for StateVector {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_density_matrix(&self) -> Result<StateDensityMatrix, StateError> {
+        StateDensityMatrix::from_state_vector(self.amplitudes.clone())
+    }
+
+    fn try_apply_channel(
+        &mut self,
+        _channel: &QuantumChannel,
+        _target_qubits: &[usize],
+    ) -> Result<bool, StateError> {
+        Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_vector_state_invalid_dimensions() {
+        let vec = Array1::<Complex64>::zeros(3);
+        assert!(matches!(
+            StateVector::check_vector_state(&vec),
+            Err(StateError::InvalidDimensions)
+        ));
+    }
+
+    #[test]
+    fn test_check_vector_state_not_normalized() {
+        let vec = Array1::<Complex64>::zeros(2);
+        assert!(matches!(
+            StateVector::check_vector_state(&vec),
+            Err(StateError::NotNormalized(_))
+        ));
+    }
+
+    #[test]
+    fn test_set_measurement_dimension_mismatch() {
+        let state = StateVector::new(1);
+        let m = Measurement::bell_basis(); // 2-qubit measurement
+        let result = state.set_measurement(&m, &[0]);
+        assert!(matches!(result, Err(StateError::DimensionMismatch { .. })));
+    }
+
+    #[test]
+    fn test_apply_out_of_bounds() {
+        let mut state = StateVector::new(1); // 1 qubit (index 0)
+
+        // Target an index that doesn't exist
+        let result = state.apply(&Gate::x(), &[1]);
+
+        assert!(matches!(
+            result,
+            Err(StateError::IndexOutOfBounds {
+                index: 1,
+                num_qubits: 1,
+            })
+        ));
+    }
+
+    #[test]
+    fn test_apply_dimension_mismatch() {
+        let mut state = StateVector::new(2);
+
+        // CNOT is a 2-qubit gate, but we only give it 1 target qubit
+        let result = state.apply(&Gate::cnot(), &[0]);
+
+        assert!(matches!(result, Err(StateError::DimensionMismatch { .. })));
+    }
+
+    #[test]
+    fn test_measurement_duplicate_qubits() {
+        let state = StateVector::new(2);
+
+        // Use bell_basis (2 qubits) but target qubit 0 twice
+        let result = state.set_measurement(&Measurement::bell_basis(), &[0, 0]);
+
+        assert!(matches!(
+            result,
+            Err(StateError::MeasurementError(
+                MeasurementError::DuplicateQubit(0)
+            ))
+        ));
+    }
+
+    #[test]
+    fn test_apply_identity_sequence() {
+        let mut state = StateVector::new(1); // |0>
+        let initial_amplitudes = state.amplitudes.clone();
+
+        // Apply X, then H, then Z, then H.
+        // HZH = X. So HZHX = XX = I.
+        state
+            .apply(&Gate::x(), &[0])
+            .unwrap()
+            .apply(&Gate::h(), &[0])
+            .unwrap()
+            .apply(&Gate::z(), &[0])
+            .unwrap()
+            .apply(&Gate::h(), &[0])
+            .unwrap();
+
+        // Check it's identical
+        for (i, &val) in state.amplitudes.indexed_iter() {
+            let diff = (val - initial_amplitudes[i]).norm();
+            assert!(
+                diff < 1e-12,
+                "State modified at index {:?}, diff: {}",
+                i,
+                diff
+            );
+        }
+    }
+
+    #[test]
+    fn test_apply_controlled_bell_state() {
+        let mut state = StateVector::new(2); // |00>
+
+        // H on qubit 0, CNOT on 0 -> 1
+        state
+            .apply(&Gate::h(), &[0])
+            .unwrap()
+            .apply_controlled(&Gate::x(), &[1], &[0])
+            .unwrap();
+
+        // The state vector for (|00> + |11>)/sqrt(2)
+        // Indices 0 and 3 should be 1/sqrt(2) ~ 0.70710678118
+        let expected_val = 1.0 / std::f64::consts::SQRT_2;
+
+        for (i, &val) in state.amplitudes.indexed_iter() {
+            let expected = if i == 0 || i == 3 { expected_val } else { 0.0 };
+            let diff = (val - Complex64::new(expected, 0.0)).norm();
+            assert!(diff < 1e-12, "Unexpected value at {}", i);
+        }
+    }
+
+    #[test]
+    fn test_apply_cnot_bell_state() {
+        let mut state = StateVector::new(2);
+        state
+            .apply(&Gate::h(), &[0])
+            .unwrap()
+            .apply(&Gate::cnot(), &[0, 1])
+            .unwrap();
+
+        let s = 1.0 / std::f64::consts::SQRT_2;
+        assert!((state.amplitudes[0] - Complex64::new(s, 0.0)).norm() < 1e-12);
+        assert!(state.amplitudes[1].norm() < 1e-12);
+        assert!(state.amplitudes[2].norm() < 1e-12);
+        assert!((state.amplitudes[3] - Complex64::new(s, 0.0)).norm() < 1e-12);
+    }
+
+    #[test]
+    fn test_apply_cnot_equivalence() {
+        let mut state_a = StateVector::new(2);
+        state_a
+            .apply(&Gate::h(), &[0])
+            .unwrap()
+            .apply(&Gate::cnot(), &[0, 1])
+            .unwrap();
+
+        let mut state_b = StateVector::new(2);
+        state_b
+            .apply(&Gate::h(), &[0])
+            .unwrap()
+            .apply_controlled(&Gate::x(), &[1], &[0])
+            .unwrap();
+
+        for (a, b) in state_a.amplitudes.iter().zip(state_b.amplitudes.iter()) {
+            assert!((a - b).norm() < 1e-12, "cnot via apply != apply_controlled");
+        }
+    }
+
+    #[test]
+    fn test_apply_cnot_reversed_targets() {
+        // targets=[1,0]: control=qubit 1, target=qubit 0.
+        // |01⟩: qubit 1=1 fires → flip qubit 0 → |11⟩
+        let mut state = StateVector::new(2);
+        state.apply(&Gate::x(), &[1]).unwrap(); // |01⟩
+        state.apply(&Gate::cnot(), &[1, 0]).unwrap();
+
+        assert!((state.amplitudes[3] - Complex64::new(1.0, 0.0)).norm() < 1e-12);
+        assert!(state.amplitudes[1].norm() < 1e-12);
+    }
+
+    #[test]
+    fn test_apply_swap() {
+        let mut state = StateVector::new(2);
+        state.apply(&Gate::x(), &[0]).unwrap(); // |10⟩
+        state.apply(&Gate::swap(), &[0, 1]).unwrap();
+
+        assert!(
+            (state.amplitudes[1] - Complex64::new(1.0, 0.0)).norm() < 1e-12,
+            "Expected |01⟩"
+        );
+        assert!(state.amplitudes[2].norm() < 1e-12);
+    }
+
+    #[test]
+    fn test_measure_collapse() {
+        let mut state = StateVector::new(1);
+
+        // Put in |+> and measure in Z basis
+        let _result = state
+            .apply(&Gate::h(), &[0])
+            .unwrap()
+            .measure(&Measurement::z_basis(), &[0])
+            .unwrap();
+
+        // Purity should be 1.0 after measurement
+        assert!((state.purity() - 1.0).abs() < 1e-12);
+
+        // Norm should be 1.0
+        let norm_sqr: f64 = state.amplitudes.iter().map(|c| c.norm_sqr()).sum();
+        assert!((norm_sqr - 1.0).abs() < 1e-12);
+
+        let mut hit_0 = false;
+        let mut hit_1 = false;
+        for _ in 0..20 {
+            let mut state = StateVector::new(1);
+            let result = state
+                .apply(&Gate::h(), &[0])
+                .unwrap()
+                .measure(&Measurement::z_basis(), &[0])
+                .unwrap();
+
+            if result.value == 0.0 {
+                assert!((state.amplitudes[0].re - 1.0).abs() < 1e-12);
+                assert!((state.amplitudes[1].re).abs() < 1e-12);
+                hit_0 = true;
+            } else {
+                assert!((state.amplitudes[1].re - 1.0).abs() < 1e-12);
+                assert!((state.amplitudes[0].re).abs() < 1e-12);
+                hit_1 = true;
+            }
+            if hit_0 && hit_1 {
+                break;
+            }
+        }
+        assert!(hit_0 && hit_1, "Both branches should be hit eventually");
+    }
+
+    #[test]
+    fn test_pick_outcome_fallback() {
+        let state = StateVector::new(1);
+        let probs = vec![0.0, 0.0];
+        let idx = state.pick_outcome(&probs);
+        assert_eq!(idx, 1);
+    }
+
+    #[test]
+    fn test_measure_zero_prob() {
+        let mut state = StateVector::new(1);
+        state.amplitudes = ndarray::Array1::zeros(2);
+        let result = state.measure(&Measurement::z_basis(), &[0]);
+        assert!(matches!(result, Err(StateError::InvalidTrace(_))));
     }
 }
