@@ -20,14 +20,14 @@ jobs:
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Generate code coverage
-        run: cargo llvm-cov --all-features --workspace --lcov --output-path coverage.lcov
+        run: cargo llvm-cov --all-features --workspace --json --output-path coverage.json
       - name: Create badges directory
         run: mkdir -p .github/badges
       - name: Generate coverage badge
-        uses: ozankasikci/rust-test-coverage-badge@v1
-        with:
-          coverage-path: coverage.lcov
-          output: .github/badges/coverage.svg
+        run: |
+          COVERAGE=$(jq -r '.data[0].totals.lines.percent' coverage.json)
+          COLOR=$(awk -v cov="$COVERAGE" 'BEGIN { if (cov >= 90) print "brightgreen"; else if (cov >= 75) print "yellow"; else print "red" }')
+          curl -s "https://img.shields.io/badge/Coverage-${COVERAGE}%25-${COLOR}.svg" > .github/badges/coverage.svg
       - name: Commit and push badge
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
