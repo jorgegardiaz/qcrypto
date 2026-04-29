@@ -169,8 +169,10 @@ mod tests {
     fn test_sampler_deterministic_zero() {
         let state = QuantumState::new(1); // |0>
         let sampler = Sampler::new();
-        let counts = sampler.run(&state, &Measurement::z_basis(), &[0], 100).unwrap();
-        
+        let counts = sampler
+            .run(&state, &Measurement::z_basis(), &[0], 100)
+            .unwrap();
+
         assert_eq!(counts.len(), 1);
         assert_eq!(*counts.get("0").unwrap(), 100);
     }
@@ -179,10 +181,12 @@ mod tests {
     fn test_sampler_deterministic_one() {
         let mut state = QuantumState::new(1);
         state.apply(&Gate::x(), &[0]).unwrap(); // |1>
-        
+
         let sampler = Sampler::new();
-        let counts = sampler.run(&state, &Measurement::z_basis(), &[0], 100).unwrap();
-        
+        let counts = sampler
+            .run(&state, &Measurement::z_basis(), &[0], 100)
+            .unwrap();
+
         assert_eq!(counts.len(), 1);
         assert_eq!(*counts.get("1").unwrap(), 100);
     }
@@ -191,18 +195,28 @@ mod tests {
     fn test_sampler_superposition() {
         let mut state = QuantumState::new(1);
         state.apply(&Gate::h(), &[0]).unwrap(); // |+>
-        
+
         let sampler = Sampler::new();
         let num_shots = 1000;
-        let counts = sampler.run(&state, &Measurement::z_basis(), &[0], num_shots).unwrap();
-        
-        // We expect roughly a 50/50 split. 
+        let counts = sampler
+            .run(&state, &Measurement::z_basis(), &[0], num_shots)
+            .unwrap();
+
+        // We expect roughly a 50/50 split.
         // With 1000 shots, getting less than 350 of one is statistically extremely unlikely.
         let count_0 = *counts.get("0").unwrap_or(&0);
         let count_1 = *counts.get("1").unwrap_or(&0);
-        
-        assert!(count_0 > 350 && count_0 < 650, "Expected roughly 500, got {}", count_0);
-        assert!(count_1 > 350 && count_1 < 650, "Expected roughly 500, got {}", count_1);
+
+        assert!(
+            count_0 > 350 && count_0 < 650,
+            "Expected roughly 500, got {}",
+            count_0
+        );
+        assert!(
+            count_1 > 350 && count_1 < 650,
+            "Expected roughly 500, got {}",
+            count_1
+        );
         assert_eq!(count_0 + count_1, num_shots);
     }
 
@@ -212,9 +226,11 @@ mod tests {
         // Apply a channel that flips the bit with 100% probability
         let channel = QuantumChannel::bit_flip(1.0);
         let sampler = Sampler::new().with_channel(channel);
-        
-        let counts = sampler.run(&state, &Measurement::z_basis(), &[0], 100).unwrap();
-        
+
+        let counts = sampler
+            .run(&state, &Measurement::z_basis(), &[0], 100)
+            .unwrap();
+
         // The noise should have flipped the state to |1> before measurement
         assert_eq!(counts.len(), 1);
         assert_eq!(*counts.get("1").unwrap(), 100);
@@ -224,11 +240,11 @@ mod tests {
     fn test_sampler_errors_propagated() {
         let state = QuantumState::new(1);
         let sampler = Sampler::new();
-        
+
         // Out of bounds target
         let result = sampler.run(&state, &Measurement::z_basis(), &[5], 10);
         assert!(result.is_err());
-        
+
         // Dimension mismatch (2-qubit measurement on 1-qubit target list)
         let result2 = sampler.run(&state, &Measurement::bell_basis(), &[0], 10);
         assert!(result2.is_err());
