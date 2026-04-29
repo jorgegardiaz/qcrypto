@@ -10,6 +10,8 @@
   [![Crates.io](https://img.shields.io/crates/v/qcrypto.svg)](https://crates.io/crates/qcrypto)
   [![Docs](https://docs.rs/qcrypto/badge.svg)](https://docs.rs/qcrypto)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+  [![Rust CI](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml/badge.svg)](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml)
+  ![Coverage](./.github/badges/coverage.svg)
 
 </div>
 
@@ -23,7 +25,7 @@ The library is implemented in **100% Safe Rust**, eliminating external dependenc
 
 ## Key Features
 
-* **Dual-State Formalism:** Automatic transparent conversion from `StateVector` ($O(2^N)$ memory) to `StateDensityMatrix` ($O(4^N)$ memory) exactly only when a non-unitary noisy channel is applied.
+* **Dual-State Formalism:** Automatic transparent conversion from `StateVector` ($O(2^N)$ memory) to `StateDensityMatrix` ($O(4^N)$ memory) exactly only when a noisy channel is applied.
 * **Open Quantum Systems:** Implementation of quantum channels (Bit Flip, Phase Damping, Amplitude Damping, Depolarizing) satisfying the Trace-Preserving condition.
 * **Generalized Measurements:** Support for Positive Operator-Valued Measures (POVM), essential for protocols like B92 and unambiguous state discrimination.
 * **Efficient Operator Expansion:** Native implementation of optimized algorithms avoiding global matrix expansion to perform local tensor updates mathematically.
@@ -46,7 +48,7 @@ cargo add qcrypto
 
 ### Core Structures
 
-* **`QuantumState`**: An intelligent `enum` that transparently encapsulates either a **`StateVector`** or a **`StateDensityMatrix`**. For efficiency, fresh algorithms execute utilizing pure vectors and intelligently cast themselves into density traces ONLY when entangled with an environment via a quantum noise channel.
+* **`QuantumState`**: A dynamic wrapper containing a pointer (`Box<dyn QuantumStateImpl>`) to the `QuantumStateImpl` trait, which is implemented by both **`StateVector`** and **`StateDensityMatrix`**. This trait-based architecture enables transparent dynamic dispatch. For optimal efficiency, simulations initialize using pure state vectors ($O(2^N)$ memory) and intelligently cast themselves into density matrices ($O(4^N)$ memory) ONLY when the state becomes mixed due to interaction with an environment via a quantum noise channel.
 * **`QuantumChannel`**: Models physical noise and decoherence (e.g., Bit Flip, Phase Damping, Amplitude Damping) using **Kraus Operators**. It ensures the evolution is Trace-Preserving.
 * **`Measurement`**: A generalized measurement framework supporting both standard Projective Measurements and **Positive Operator-Valued Measures (POVM)**. This is crucial for implementing optimal discrimination strategies and ambiguous state detection.
 * **`Gate`**: Provides standard unitary operations and allows for the definition of custom single and multi-qubit unitaries.
