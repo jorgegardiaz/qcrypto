@@ -9,6 +9,7 @@
 use nalgebra::DMatrix;
 use ndarray::{Array1, Array2, Axis};
 use num_complex::Complex64;
+use rayon::prelude::*;
 
 /// Computes the Kronecker (Tensor) product of two matrices.
 ///
@@ -500,41 +501,35 @@ pub fn apply_local_left(
     // Dimension of the local operator (e.g., 2 for 1 target qubit, 4 for 2 target qubits).
     let k_dim = 1 << targets.len();
 
-    // Iterate over all columns. Left multiplication only mixes row elements.
-    for col in 0..dim {
-        // Iterate over all rows.
-        for row in 0..dim {
-            // If the current basis state does not satisfy the control conditions,
-            // the operator acts as the Identity matrix for this row.
-            if (row & control_mask) != control_mask {
-                new_rho[[row, col]] = rho[[row, col]];
-                continue;
-            }
-
-            // Extract the bit values of the target qubits from the current physical row index.
-            let small_row = extract_bits(row, &mapped_targets);
-
-            let mut sum = Complex64::new(0.0, 0.0);
-
-            // Perform the local matrix-vector multiplication for the target subspace.
-            for small_col in 0..k_dim {
-                let val = local_matrix[[small_row, small_col]];
-
-                // Skip negligible values to optimize performance (sparse matrix behavior).
-                if val.norm_sqr() < f64::EPSILON {
+    // Iterate over all columns in parallel. Left multiplication only mixes row elements.
+    new_rho
+        .axis_iter_mut(Axis(1))
+        .into_par_iter()
+        .enumerate()
+        .for_each(|(col, mut col_view)| {
+            for row in 0..dim {
+                if (row & control_mask) != control_mask {
+                    col_view[row] = rho[[row, col]];
                     continue;
                 }
 
-                // Reconstruct the physical row index 'm':
-                // Combine the preserved passive bits of 'row' with the new target bits.
-                let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
+                let small_row = extract_bits(row, &mapped_targets);
+                let mut sum = Complex64::new(0.0, 0.0);
 
-                sum += val * rho[[m, col]];
+                for small_col in 0..k_dim {
+                    let val = local_matrix[[small_row, small_col]];
+
+                    if val.norm_sqr() < f64::EPSILON {
+                        continue;
+                    }
+
+                    let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
+                    sum += val * rho[[m, col]];
+                }
+
+                col_view[row] = sum;
             }
-
-            new_rho[[row, col]] = sum;
-        }
-    }
+        });
 
     new_rho
 }
@@ -582,39 +577,35 @@ pub fn apply_local_right(
     let passive_mask = !target_mask;
     let k_dim = 1 << targets.len();
 
-    // Iterate over all rows. Right multiplication only mixes column elements.
-    for row in 0..dim {
-        for col in 0..dim {
-            // If the current basis state does not satisfy the control conditions,
-            // the operator acts as the Identity matrix for this column.
-            if (col & control_mask) != control_mask {
-                new_rho[[row, col]] = rho[[row, col]];
-                continue;
-            }
-
-            // Extract the bit values of the target qubits from the current physical column index.
-            let small_col_idx = extract_bits(col, &mapped_targets);
-
-            let mut sum = Complex64::new(0.0, 0.0);
-
-            // Perform the local vector-matrix multiplication for the target subspace.
-            for small_row_idx in 0..k_dim {
-                // Note the index order for the local matrix: it's multiplied from the right.
-                let val = local_matrix[[small_row_idx, small_col_idx]];
-
-                if val.norm_sqr() < f64::EPSILON {
+    // Iterate over all rows in parallel. Right multiplication only mixes column elements.
+    new_rho
+        .axis_iter_mut(Axis(0))
+        .into_par_iter()
+        .enumerate()
+        .for_each(|(row, mut row_view)| {
+            for col in 0..dim {
+                if (col & control_mask) != control_mask {
+                    row_view[col] = rho[[row, col]];
                     continue;
                 }
 
-                // Reconstruct the physical column index 'm'.
-                let m = (col & passive_mask) | deposit_bits(small_row_idx, &mapped_targets);
+                let small_col_idx = extract_bits(col, &mapped_targets);
+                let mut sum = Complex64::new(0.0, 0.0);
 
-                sum += rho[[row, m]] * val;
+                for small_row_idx in 0..k_dim {
+                    let val = local_matrix[[small_row_idx, small_col_idx]];
+
+                    if val.norm_sqr() < f64::EPSILON {
+                        continue;
+                    }
+
+                    let m = (col & passive_mask) | deposit_bits(small_row_idx, &mapped_targets);
+                    sum += rho[[row, m]] * val;
+                }
+
+                row_view[col] = sum;
             }
-
-            new_rho[[row, col]] = sum;
-        }
-    }
+        });
 
     new_rho
 }
@@ -663,28 +654,33 @@ pub fn apply_local_vector(
     // In a state vector representation, left multiplication by an operator M is:
     // (M |psi>)_i = sum_j M_{ij} psi_j
     // where 'row' maps to 'i', and 'j' is constructed by iterating over small_col.
-    for row in 0..dim {
-        if (row & control_mask) != control_mask {
-            new_psi[row] = psi[row];
-            continue;
-        }
-
-        let small_row = extract_bits(row, &mapped_targets);
-        let mut sum = Complex64::new(0.0, 0.0);
-
-        for small_col in 0..k_dim {
-            let val = local_matrix[[small_row, small_col]];
-
-            if val.norm_sqr() < f64::EPSILON {
-                continue;
+    new_psi
+        .as_slice_mut()
+        .unwrap()
+        .par_iter_mut()
+        .enumerate()
+        .for_each(|(row, el)| {
+            if (row & control_mask) != control_mask {
+                *el = psi[row];
+                return;
             }
 
-            let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
-            sum += val * psi[m];
-        }
+            let small_row = extract_bits(row, &mapped_targets);
+            let mut sum = Complex64::new(0.0, 0.0);
 
-        new_psi[row] = sum;
-    }
+            for small_col in 0..k_dim {
+                let val = local_matrix[[small_row, small_col]];
+
+                if val.norm_sqr() < f64::EPSILON {
+                    continue;
+                }
+
+                let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
+                sum += val * psi[m];
+            }
+
+            *el = sum;
+        });
 
     new_psi
 }
