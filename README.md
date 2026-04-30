@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 3. Evolve through an Amplitude Damping Channel (gamma = 0.3)
     // This transforms the pure state into a mixed state.
-    let channel = QuantumChannel::amplitude_damping(0.3)?;
+    let channel = QuantumChannel::amplitude_damping(0.3);
     rho.apply_channel(&channel, &[0])?;
     println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
     // Purity will be < 1.0 due to the non-unitary channel evolution.
@@ -131,7 +131,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let threshold = 0.85; // Acceptance threshold based on expected QBER
     
     // Simulate a realistic channel with 5% noise
-    let noisy_channel = QuantumChannel::bit_flip(0.05)?;
+    let noisy_channel = QuantumChannel::bit_flip(0.05);
 
     let result = qia_qzkp::run(n_qubits, &noisy_channel, threshold)?;
 
@@ -151,7 +151,7 @@ use qcrypto::protocols::qkd::bbm92;
 use qcrypto::{QuantumChannel, rng::set_global_seed};
 
 fn main() {
-    let channel = QuantumChannel::depolarizing(0.1)?;
+    let channel = QuantumChannel::depolarizing(0.1);
     
     // Lock the RNG for this thread to a specific seed
     set_global_seed(42);
@@ -189,7 +189,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Iterate over different noise configurations
     for &noise in &noise_levels {
-        let channel = QuantumChannel::depolarizing(noise)?;
+        let channel = QuantumChannel::depolarizing(noise);
 
         // Run the protocol multiple times for each configuration
         for execution in 1..=num_executions {
