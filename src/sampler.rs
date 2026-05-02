@@ -129,19 +129,13 @@ impl Sampler {
         for _ in 0..num_shots {
             let r: f64 = crate::rng::random_f64(); // Generates [0.0, 1.0)
 
-            // Determine outcome index based on CDF
-            let mut outcome_idx = 0;
-            for (i, &cumulative_prob) in cdf.iter().enumerate() {
-                if r < cumulative_prob {
-                    outcome_idx = i;
-                    break;
-                }
-            }
+            // Determine outcome index based on CDF using binary search (O(log N))
+            let mut outcome_idx = cdf.partition_point(|&cumulative_prob| cumulative_prob <= r);
 
-            // // Safety check for floating point rounding errors
-            // if outcome_idx >= probs.len() {
-            //     outcome_idx = probs.len() - 1;
-            // }
+            // Safety check for floating point rounding errors
+            if outcome_idx >= probs.len() {
+                outcome_idx = probs.len() - 1;
+            }
 
             // Increment the counter for this index directly
             raw_counts[outcome_idx] += 1;
