@@ -1,17 +1,20 @@
 <div align="center">
 
   <h1>qcrypto</h1>
-
+  
   <p>
     <strong>A Pure Rust Framework for Quantum Cryptography Simulation</strong>
   </p>
-  
+
+  <img src="./assets/qcrypto_logo.png" alt="qcrypto logo" width="150">
+    
   [![Pure Rust](https://img.shields.io/badge/Pure-Rust-orange)](https://www.rust-lang.org)
   [![Crates.io](https://img.shields.io/crates/v/qcrypto.svg)](https://crates.io/crates/qcrypto)
   [![Docs](https://docs.rs/qcrypto/badge.svg)](https://docs.rs/qcrypto)
   [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
   [![Rust CI](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml/badge.svg)](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml)
   ![Coverage](https://raw.githubusercontent.com/jorgegardiaz/qcrypto/master/.github/badges/coverage.svg)
+
 
 </div>
 
