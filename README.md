@@ -20,7 +20,7 @@
 
 <br />
 
-`qcrypto` is a cross-platform Rust library designed for the design, simulation, and validation of Quantum Cryptography protocols.
+`qcrypto` is a cross-platform Rust library tailored for the design, simulation, and validation of Quantum Cryptography protocols.
 
 Unlike general-purpose quantum simulators that strictly focus on state-vector evolution for logical circuits, `qcrypto` implements an intelligent **Dual-State Architecture**. It dynamically switches between highly-efficient **State Vectors** for pure states and robust **Density Matrices** when open quantum systems, decoherence, or noisy channels are introduced. This design choice enables both high-performance execution of unitary logical circuits and the precise simulation of generalized measurements (POVMs) and hardware vulnerabilities.
 
