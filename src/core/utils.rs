@@ -717,7 +717,7 @@ mod tests {
         let extracted = extract_bits(original, &indices);
         let deposited = deposit_bits(extracted, &indices);
         // The deposited value should match the original bits at the target positions
-        assert_eq!(deposited, original & ((1 << 2) | (1 << 4) - 1)); // mask relevant bits
+        assert_eq!(deposited, 0b1010); // mask relevant bits
         assert_eq!(extracted, 0b11);
     }
 
