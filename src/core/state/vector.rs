@@ -50,10 +50,7 @@ impl StateVector {
     /// }
     /// ```
     pub fn new(num_qubits: usize) -> Self {
-        assert!(
-            num_qubits > 0,
-            "Number of qubits must be at least 1, got 0"
-        );
+        assert!(num_qubits > 0, "Number of qubits must be at least 1, got 0");
         let dim = 1 << num_qubits;
         let mut amplitudes = Array1::<Complex64>::zeros(dim);
         amplitudes[0] = Complex64::new(1.0, 0.0);

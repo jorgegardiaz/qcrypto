@@ -222,11 +222,7 @@ fn test_swap_gate_exchanges_states() {
     state.apply(&Gate::x(), &[0]).unwrap(); // |10>
     state.apply(&Gate::swap(), &[0, 1]).unwrap();
 
-    let sv = state
-        .state
-        .as_any()
-        .downcast_ref::<StateVector>()
-        .unwrap();
+    let sv = state.state.as_any().downcast_ref::<StateVector>().unwrap();
     // Should be |01> = index 1
     assert!((sv.amplitudes[1] - Complex64::new(1.0, 0.0)).norm() < 1e-12);
 }
@@ -238,11 +234,7 @@ fn test_swap_is_self_inverse() {
     state.apply(&Gate::swap(), &[0, 1]).unwrap(); // |01>
     state.apply(&Gate::swap(), &[0, 1]).unwrap(); // back to |10>
 
-    let sv = state
-        .state
-        .as_any()
-        .downcast_ref::<StateVector>()
-        .unwrap();
+    let sv = state.state.as_any().downcast_ref::<StateVector>().unwrap();
     assert!((sv.amplitudes[2] - Complex64::new(1.0, 0.0)).norm() < 1e-12);
 }
 
@@ -269,7 +261,9 @@ fn test_toffoli_only_flips_when_both_controls_set() {
 
         state.apply(&Gate::toffoli(), &[0, 1, 2]).unwrap();
 
-        let probs = state.set_measurement(&Measurement::z_basis(), &[2]).unwrap();
+        let probs = state
+            .set_measurement(&Measurement::z_basis(), &[2])
+            .unwrap();
         if expected_q2 {
             assert!(
                 (probs[1] - 1.0).abs() < 1e-12,
@@ -357,5 +351,8 @@ fn test_entangled_state_has_unit_purity() {
     state.apply(&Gate::h(), &[0]).unwrap();
     state.apply_controlled(&Gate::x(), &[1], &[0]).unwrap();
 
-    assert!((state.purity() - 1.0).abs() < 1e-12, "Bell state should be pure");
+    assert!(
+        (state.purity() - 1.0).abs() < 1e-12,
+        "Bell state should be pure"
+    );
 }

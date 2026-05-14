@@ -104,7 +104,11 @@ fn test_sampler_bell_basis_on_bell_state() {
         .unwrap();
 
     // Bell state measured in Bell basis should give 100% one outcome
-    assert_eq!(counts.len(), 1, "Bell state should give a single Bell outcome");
+    assert_eq!(
+        counts.len(),
+        1,
+        "Bell state should give a single Bell outcome"
+    );
     let total: usize = counts.values().sum();
     assert_eq!(total, 500);
 }
@@ -175,7 +179,10 @@ fn test_sampler_deterministic_with_seed() {
     let counts1 = run_once(42);
     let counts2 = run_once(42);
 
-    assert_eq!(counts1, counts2, "Same seed should produce identical counts");
+    assert_eq!(
+        counts1, counts2,
+        "Same seed should produce identical counts"
+    );
 }
 
 #[test]
@@ -198,7 +205,10 @@ fn test_sampler_different_seeds_differ() {
     let c0_1 = *counts1.get("0").unwrap_or(&0);
     let c0_2 = *counts2.get("0").unwrap_or(&0);
     // This can technically fail, but with probability < 1e-6
-    assert_ne!(c0_1, c0_2, "Different seeds should produce different results");
+    assert_ne!(
+        c0_1, c0_2,
+        "Different seeds should produce different results"
+    );
 }
 
 // ─── Error propagation ───────────────────────────────────────────────────────
