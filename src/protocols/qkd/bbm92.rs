@@ -16,8 +16,8 @@ pub struct Bbm92Result {
     pub check_errors: usize,
     /// The Quantum Bit Error Rate (QBER) in percentage (on check bits).
     pub qber: f64,
-    /// The number of times Eve was detected (simulated).
-    pub eve_detected_count: usize,
+    /// The number of times Eve intercepted a qubit (simulated).
+    pub eve_intercept_count: usize,
     /// Alice's chosen bases (0: Z, 1: X).
     pub alice_bases: Vec<bool>,
     /// Bob's chosen bases (0: Z, 1: X).
@@ -26,8 +26,10 @@ pub struct Bbm92Result {
     pub alice_bits: Vec<bool>,
     /// Bob's measurement results.
     pub bob_results: Vec<bool>,
-    /// The final established key (sifted key minus check bits).
-    pub established_key: Vec<bool>,
+    /// Alice's final key (sifted key minus check bits).
+    pub alice_key: Vec<bool>,
+    /// Bob's final key (sifted key minus check bits). May differ from Alice's due to channel noise.
+    pub bob_key: Vec<bool>,
 }
 
 /// Executes the BBM92 QKD protocol.
@@ -63,7 +65,8 @@ pub struct Bbm92Result {
 /// ```
 pub fn run(
     num_pairs: usize,
-    channel: &QuantumChannel,
+    channel_alice: &QuantumChannel,
+    channel_bob: &QuantumChannel,
     eve_ratio: f64,
     check_ratio: f64,
 ) -> Result<Bbm92Result, StateError> {
@@ -71,20 +74,23 @@ pub fn run(
     let mut alice_bases = Vec::with_capacity(num_pairs);
     let mut bob_bases = Vec::with_capacity(num_pairs);
     let mut bob_results = Vec::with_capacity(num_pairs);
-    let mut eve_detected_count = 0;
+    let mut eve_intercept_count = 0;
 
     for _ in 0..num_pairs {
         // Create EPR pair
         let mut state = QuantumState::new(2);
-        state.apply(&Gate::h(), &[0])?;
-        state.apply(&Gate::cnot(), &[0, 1])?;
+        state
+            .apply(&Gate::h(), &[0])?
+            .apply(&Gate::cnot(), &[0, 1])?;
 
-        // Alice sends one of the EPR's state qubit to Bob
-        state.apply_channel(channel, &[1])?;
+        // Alice and Bob each receive their qubit through independent noisy channels
+        state
+            .apply_channel(channel_alice, &[0])?
+            .apply_channel(channel_bob, &[1])?;
 
-        // Eavesdropper intercepts
-        if eve_ratio > 1e-9 && crate::rng::random_bool(eve_ratio) {
-            eve_detected_count += 1;
+        // Eavesdropper intercepts Bob's channel (intercept-and-resend attack)
+        if eve_ratio > 0.0 && crate::rng::random_bool(eve_ratio) {
+            eve_intercept_count += 1;
             let e_basis = crate::rng::random_bool(0.5);
             let measurement = if e_basis {
                 Measurement::x_basis()
@@ -94,6 +100,9 @@ pub fn run(
 
             let _ = state.measure(&measurement, &[1])?;
         }
+
+        // Eve send qubit to Bob through channel
+        state.apply_channel(channel_bob, &[1])?;
 
         // Alice measures
         let a_basis = crate::rng::random_bool(0.5);
@@ -155,10 +164,12 @@ pub fn run(
         0.0
     };
 
-    // 5. Build established key
-    let mut established_key = Vec::with_capacity(key_indices.len());
+    // 5. Build keys for Alice and Bob separately
+    let mut alice_key = Vec::with_capacity(key_indices.len());
+    let mut bob_key = Vec::with_capacity(key_indices.len());
     for &i in key_indices {
-        established_key.push(alice_bits[i]);
+        alice_key.push(alice_bits[i]);
+        bob_key.push(bob_results[i]);
     }
 
     Ok(Bbm92Result {
@@ -166,12 +177,13 @@ pub fn run(
         total_sifted,
         check_errors,
         qber,
-        eve_detected_count,
+        eve_intercept_count,
         alice_bases,
         bob_bases,
         alice_bits,
         bob_results,
-        established_key,
+        alice_key,
+        bob_key,
     })
 }
 
@@ -182,27 +194,54 @@ mod tests {
     #[test]
     fn test_bbm92_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
-        let result = run(100, &channel, 0.0, 0.5).unwrap();
+        let result = run(100, &channel, &channel, 0.0, 0.5).unwrap();
 
         assert_eq!(result.raw_length, 100);
         assert_eq!(result.check_errors, 0);
         assert_eq!(result.qber, 0.0);
-        assert_eq!(result.eve_detected_count, 0);
+        assert_eq!(result.eve_intercept_count, 0);
+        assert_eq!(result.alice_key.len(), result.bob_key.len());
+        assert_eq!(result.alice_key, result.bob_key);
+    }
+
+    #[test]
+    fn test_bbm92_noisy_keys_differ() {
+        let channel = QuantumChannel::bit_flip(0.3);
+        let result = run(1000, &channel, &channel, 0.0, 0.0).unwrap();
+
+        assert_eq!(result.alice_key.len(), result.bob_key.len());
+        let mismatches = result
+            .alice_key
+            .iter()
+            .zip(&result.bob_key)
+            .filter(|(a, b)| a != b)
+            .count();
+        assert!(
+            mismatches > 0,
+            "noisy channel should produce key mismatches between Alice and Bob"
+        );
     }
 
     #[test]
     fn test_bbm92_eve() {
         let channel = QuantumChannel::bit_flip(0.0);
-        let result = run(100, &channel, 1.0, 0.5).unwrap();
+        // Eve intercepts everything.
+        // BBM92 (entanglement-based BB84) also has 25% theoretical QBER under intercept-and-resend.
+        // 5000 pairs -> ~1250 check bits -> σ≈0.012, tolerance 0.06 covers ~5σ
+        let result = run(5000, &channel, &channel, 1.0, 0.5).unwrap();
 
-        assert!(result.eve_detected_count > 0);
-        assert!(result.qber > 0.0);
+        assert!(result.eve_intercept_count > 0);
+        assert!(
+            (result.qber - 0.25).abs() < 0.06,
+            "QBER {} should be around 0.25",
+            result.qber
+        );
     }
 
     #[test]
     fn test_bbm92_zero_check() {
         let channel = QuantumChannel::bit_flip(0.0);
-        let result = run(100, &channel, 0.0, 0.0).unwrap();
+        let result = run(100, &channel, &channel, 0.0, 0.0).unwrap();
         assert_eq!(result.qber, 0.0);
     }
 }

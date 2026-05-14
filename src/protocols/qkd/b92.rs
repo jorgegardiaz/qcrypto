@@ -22,11 +22,13 @@ pub struct B92Result {
     pub qber: f64,
     /// The number of times Eve was detected (simulated).
     pub eve_detected_count: usize,
-    /// The final established key (matches between Alice and Bob, excluding check bits).
-    pub established_key: Vec<bool>,
+    /// Alice's final key (conclusive results excluding check bits).
+    pub alice_key: Vec<bool>,
+    /// Bob's final key (conclusive results excluding check bits).
+    pub bob_key: Vec<bool>,
     /// Alice's original bits.
     pub alice_bits: Vec<bool>,
-    /// Bob's measurement results (0: bit 0, 1: bit 1, -1: inconclusive).
+    /// Bob's measurement results (0: bit 1, 1: bit 0, -1: inconclusive).
     pub bob_results: Vec<i8>,
 }
 
@@ -92,7 +94,7 @@ pub fn run(
         state.apply_channel(channel, &[0])?;
 
         // Eavesdropper intercepts
-        if eve_ratio > 1e-12 && crate::rng::random_bool(eve_ratio) {
+        if eve_ratio > 0.0 && crate::rng::random_bool(eve_ratio) {
             eve_intercepted_count += 1;
             let e_basis = crate::rng::random_bool(0.5);
             let m = if e_basis {
@@ -102,6 +104,9 @@ pub fn run(
             };
             let _ = state.measure(&m, &[0])?;
         }
+
+        // Eve send qubit to Bob through channel
+        state.apply_channel(channel, &[0])?;
 
         // Bob measures using his POVM
         let res = state.measure(bob_device, &[0])?;
@@ -155,11 +160,15 @@ pub fn run(
         0.0
     };
 
-    // 5. Build established key from key bits
-    let mut established_key = Vec::with_capacity(key_indices.len());
+    // 5. Build established keys from key bits
+    let mut alice_key = Vec::with_capacity(key_indices.len());
+    let mut bob_key = Vec::with_capacity(key_indices.len());
     for &idx in key_indices {
+        // bob_results[idx] is 0 or 1 here (conclusive)
+        // From run logic: index 0 -> bit 1, index 1 -> bit 0
         let b_val = bob_results[idx] == 0;
-        established_key.push(b_val);
+        alice_key.push(alice_bits[idx]);
+        bob_key.push(b_val);
     }
 
     Ok(B92Result {
@@ -168,7 +177,8 @@ pub fn run(
         check_errors,
         qber,
         eve_detected_count: eve_intercepted_count,
-        established_key,
+        alice_key,
+        bob_key,
         alice_bits,
         bob_results,
     })
@@ -235,13 +245,50 @@ mod tests {
     }
 
     #[test]
+    fn test_b92_keys_equal_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run(500, &channel, &measurement, 0.0, 0.0).unwrap();
+
+        assert_eq!(result.alice_key.len(), result.bob_key.len());
+        assert_eq!(result.alice_key, result.bob_key);
+    }
+
+    #[test]
+    fn test_b92_noisy_keys_differ() {
+        let channel = QuantumChannel::bit_flip(0.3);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run(1000, &channel, &measurement, 0.0, 0.0).unwrap();
+
+        assert_eq!(result.alice_key.len(), result.bob_key.len());
+        let mismatches = result
+            .alice_key
+            .iter()
+            .zip(&result.bob_key)
+            .filter(|(a, b)| a != b)
+            .count();
+        assert!(
+            mismatches > 0,
+            "noisy channel should produce key mismatches between Alice and Bob"
+        );
+    }
+
+    #[test]
     fn test_b92_eve() {
         let channel = QuantumChannel::bit_flip(0.0);
         let measurement = build_optimal_povm_b92().unwrap();
-        let result = run(100, &channel, &measurement, 1.0, 0.5).unwrap();
+        // Eve intercepts everything.
+        // B92 is very sensitive to intercept-and-resend.
+        let result = run(1000, &channel, &measurement, 1.0, 0.5).unwrap();
 
         assert!(result.eve_detected_count > 0);
-        assert!(result.qber > 0.0);
+        // In B92, if Eve measures in the wrong basis (50%), she can resend a state
+        // that Bob's POVM detects as the *wrong* conclusive result.
+        assert!(
+            result.qber > 0.15,
+            "QBER {} should be significant",
+            result.qber
+        );
     }
 
     #[test]

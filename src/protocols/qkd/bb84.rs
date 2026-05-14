@@ -18,8 +18,10 @@ pub struct BB84Result {
     pub qber: f64,
     /// The number of times Eve was detected (simulated).
     pub eve_detected_count: usize,
-    /// The final established key (sifted key minus check bits).
-    pub established_key: Vec<bool>,
+    /// Alice's final key (sifted key minus check bits).
+    pub alice_key: Vec<bool>,
+    /// Bob's final key (sifted key minus check bits).
+    pub bob_key: Vec<bool>,
     /// Alice's original bits.
     pub alice_bits: Vec<bool>,
     /// Alice's chosen bases (0: Z, 1: X).
@@ -92,7 +94,7 @@ pub fn run(
         state.apply_channel(channel, &[0])?;
 
         // Eavesdropper Intercepts
-        if eve_ratio > 1e-12 && crate::rng::random_bool(eve_ratio) {
+        if eve_ratio > 0.0 && crate::rng::random_bool(eve_ratio) {
             eve_intercepted_count += 1;
 
             let e_basis = crate::rng::random_bool(0.5);
@@ -105,6 +107,9 @@ pub fn run(
             let _ = state.measure(&measurement, &[0])?;
         }
 
+        // Eve send qubit to Bob through channel
+        state.apply_channel(channel, &[0])?;
+
         // Bob measures
         let b_basis = crate::rng::random_bool(0.5);
         let measurement = if b_basis {
@@ -113,9 +118,9 @@ pub fn run(
             Measurement::z_basis()
         };
 
-        let res = state.measure(&measurement, &[0])?;
+        let result = state.measure(&measurement, &[0])?;
 
-        let b_val = res.index == 1;
+        let b_val = result.value as usize == 1;
 
         alice_bits.push(a_bit);
         alice_bases.push(a_basis);
@@ -154,10 +159,12 @@ pub fn run(
         0.0
     };
 
-    // 5. Build established key
-    let mut established_key = Vec::with_capacity(key_indices.len());
+    // 5. Build established keys
+    let mut alice_key = Vec::with_capacity(key_indices.len());
+    let mut bob_key = Vec::with_capacity(key_indices.len());
     for &i in key_indices {
-        established_key.push(alice_bits[i]);
+        alice_key.push(alice_bits[i]);
+        bob_key.push(bob_results[i]);
     }
 
     Ok(BB84Result {
@@ -166,7 +173,8 @@ pub fn run(
         check_errors,
         qber,
         eve_detected_count: eve_intercepted_count,
-        established_key,
+        alice_key,
+        bob_key,
         alice_bits,
         alice_bases,
         bob_bases,
@@ -190,14 +198,46 @@ mod tests {
     }
 
     #[test]
+    fn test_bb84_keys_equal_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(200, &channel, 0.0, 0.0).unwrap();
+
+        assert_eq!(result.alice_key.len(), result.bob_key.len());
+        assert_eq!(result.alice_key, result.bob_key);
+    }
+
+    #[test]
+    fn test_bb84_noisy_keys_differ() {
+        let channel = QuantumChannel::bit_flip(0.3);
+        let result = run(500, &channel, 0.0, 0.0).unwrap();
+
+        assert_eq!(result.alice_key.len(), result.bob_key.len());
+        let mismatches = result
+            .alice_key
+            .iter()
+            .zip(&result.bob_key)
+            .filter(|(a, b)| a != b)
+            .count();
+        assert!(
+            mismatches > 0,
+            "noisy channel should produce key mismatches between Alice and Bob"
+        );
+    }
+
+    #[test]
     fn test_bb84_eve() {
         let channel = QuantumChannel::bit_flip(0.0);
-        // Eve intercepts everything
-        let result = run(100, &channel, 1.0, 0.5).unwrap();
+        // Eve intercepts everything.
+        // Expected QBER for BB84: (1/2) * (1/2) = 1/4 = 0.25
+        // 5000 qubits -> ~1250 check bits -> σ≈0.012, tolerance 0.06 covers ~5σ
+        let result = run(5000, &channel, 1.0, 0.5).unwrap();
 
-        // Eve should introduce errors
         assert!(result.eve_detected_count > 0);
-        assert!(result.qber > 0.0);
+        assert!(
+            (result.qber - 0.25).abs() < 0.06,
+            "QBER {} should be around 0.25",
+            result.qber
+        );
     }
 
     #[test]
