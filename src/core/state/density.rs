@@ -1,4 +1,4 @@
-use crate::core::errors::{ChannelError, MeasurementError, StateError};
+use crate::core::errors::{ChannelError, GateError, MeasurementError, StateError};
 use crate::core::state::{
     GateApplicable, Measurable, PurityComputable, QuantumStateImpl, Validatable,
 };
@@ -52,6 +52,7 @@ impl StateDensityMatrix {
     /// }
     /// ```
     pub fn new(num_qubits: usize) -> Self {
+        assert!(num_qubits > 0, "Number of qubits must be at least 1, got 0");
         let dim = 1 << num_qubits;
         let mut density_matrix = Array2::<Complex64>::zeros((dim, dim));
         density_matrix[[0, 0]] = Complex64::new(1.0, 0.0);
@@ -80,9 +81,9 @@ impl StateDensityMatrix {
 
         Ok(())
     }
-    /// Extrapolates that a density matrix representation accurately mirrors a quantum state.
+    /// Validates that a density matrix is well-formed.
     ///
-    /// Tests for square dimension constraints and exact Trace value $= 1.0$.
+    /// Checks for square dimensions, power-of-2 size, and $\text{Tr}(\rho) = 1$.
     fn check_density_matrix(matrix: &Array2<Complex64>) -> Result<(), StateError> {
         let (rows, cols) = matrix.dim();
 
@@ -105,7 +106,7 @@ impl StateDensityMatrix {
         Ok(())
     }
 
-    /// Verifies if a user-supplied target query index matches available hardware constraints.
+    /// Validates that a qubit index is within bounds for this state.
     fn validate_qubit_index(&self, index: usize) -> Result<(), StateError> {
         if index >= self.num_qubits {
             return Err(StateError::IndexOutOfBounds {
@@ -152,9 +153,9 @@ impl StateDensityMatrix {
     pub fn from_state_vector(vector: Array1<Complex64>) -> Result<Self, StateError> {
         Self::check_vector_state(&vector)?;
 
-        // Calculate number of qubits: dim = 2^n, so n = log2(dim)
+        // Calculate number of qubits: dim = 2^n
         let dim = vector.len();
-        let num_qubits = (dim as f64).log2() as usize;
+        let num_qubits = dim.trailing_zeros() as usize;
 
         // Compute the density matrix of the pure state: rho = |psi><psi|
         let col_vector = vector
@@ -170,11 +171,11 @@ impl StateDensityMatrix {
         })
     }
 
-    /// Instantiates a pure algorithm representation directly originating from a custom unverified trace.
+    /// Creates a `StateDensityMatrix` from an existing density matrix.
     ///
     /// # Arguments
     ///
-    /// * `matrix` - The mathematically equivalent rho.
+    /// * `matrix` - The density matrix $\rho$.
     ///
     /// # Returns
     ///
@@ -182,7 +183,7 @@ impl StateDensityMatrix {
     ///
     /// # Errors
     ///
-    /// Returns a `StateError` if the underlying trace does not equal 1.0 or array representations fragment.
+    /// Returns a `StateError` if the matrix is not square, not a power of 2, or has trace $\neq 1$.
     ///
     /// # Example
     /// ```rust
@@ -211,7 +212,7 @@ impl StateDensityMatrix {
         })
     }
 
-    /// Checks if the underlying loaded density matrix holds mathematical validity properties.
+    /// Checks if the density matrix is mathematically valid.
     ///
     /// # Returns
     ///
@@ -233,12 +234,12 @@ impl StateDensityMatrix {
         Ok(())
     }
 
-    /// Applies a quantum gate matrix structurally representing operations acting locally over specifically targeted matrices.
+    /// Applies a local quantum gate to the specified target qubits.
     ///
     /// # Arguments
     ///
-    /// * `gate` - The matrix describing logical `Gate` instructions to map.
-    /// * `target_qubits` - Pointers bounding execution targets on hardware.
+    /// * `gate` - The quantum gate to apply.
+    /// * `target_qubits` - The indices of the qubits the gate acts upon.
     ///
     /// # Returns
     ///
@@ -269,15 +270,15 @@ impl StateDensityMatrix {
         self.apply_controlled(gate, target_qubits, &[])
     }
 
-    /// Applies local tensor matrices using highly-performant unitary execution boundaries.
+    /// Applies a controlled quantum gate to the specified target qubits.
     ///
-    /// This specific block executes mathematical logical evolutions equivalent to structurally simulating $\rho' = U \rho U^\dagger$.
+    /// Performs the unitary evolution $\rho' = U \rho U^\dagger$.
     ///
     /// # Arguments
     ///
-    /// * `gate` - The base local operation template structure (i.e Hadamard constraint vectors).
-    /// * `target_qubits` - Slice targeting array pointers for action application.
-    /// * `control_qubits` - Opt-in indices structurally limiting constraints according to a sequence boundary.
+    /// * `gate` - The quantum gate to apply.
+    /// * `target_qubits` - The indices of the target qubits.
+    /// * `control_qubits` - Slice with the indices of the control qubits (empty if none).
     ///
     /// # Returns
     ///
@@ -311,7 +312,6 @@ impl StateDensityMatrix {
         target_qubits: &[usize],
         control_qubits: &[usize],
     ) -> Result<&mut Self, StateError> {
-        // 1. Validate boundary dimensions
         if gate.num_qubits != target_qubits.len() {
             return Err(StateError::DimensionMismatch {
                 expected: gate.num_qubits,
@@ -320,7 +320,6 @@ impl StateDensityMatrix {
             });
         }
 
-        // 2. Map logical indices back to hardware limitations
         for &q in target_qubits {
             self.validate_qubit_index(q)?;
         }
@@ -329,8 +328,21 @@ impl StateDensityMatrix {
             self.validate_qubit_index(q)?;
         }
 
-        // Left multiplication projection mapping rho_temp = U * rho.
-        // Operation runs logically directly limiting dense sparse arrays to save explicit storage cost.
+        if let Some(dup) = utils::find_duplicate(target_qubits) {
+            return Err(GateError::DuplicateQubit(dup).into());
+        }
+
+        if let Some(dup) = utils::find_duplicate(control_qubits) {
+            return Err(GateError::DuplicateQubit(dup).into());
+        }
+
+        for &c in control_qubits {
+            if target_qubits.contains(&c) {
+                return Err(GateError::ControlTargetOverlap(c).into());
+            }
+        }
+
+        // rho_temp = U * rho
         let temp_rho = utils::apply_local_left(
             self.num_qubits,
             &self.density_matrix,
@@ -339,10 +351,10 @@ impl StateDensityMatrix {
             control_qubits,
         );
 
-        // Map logical conjugate transpose structural translation bounding values U_dagger.
+        // U_dagger = U†
         let u_dagger = gate.matrix.t().mapv(|c| c.conj());
 
-        // Run structural algorithm backwards projecting density representation rho_new = rho_temp * U_dagger.
+        // rho_new = rho_temp * U†
         let final_rho = utils::apply_local_right(
             self.num_qubits,
             &temp_rho,
@@ -391,7 +403,6 @@ impl StateDensityMatrix {
         measurement: &Measurement,
         target_qubits: &[usize],
     ) -> Result<Vec<f64>, StateError> {
-        // Validate measurement mapping bounds locally before execution paths block underlying architecture bounds
         if measurement.num_qubits != target_qubits.len() {
             return Err(StateError::DimensionMismatch {
                 expected: measurement.num_qubits,
@@ -435,7 +446,7 @@ impl StateDensityMatrix {
                     &[],
                 );
 
-                // Calculate the true outcome boundaries mapping Trace(rho).
+                // p_k = Tr(M_k * rho * M_k†)
                 let tr = utils::trace(&unnormalized_rho);
                 tr.re.max(0.0)
             })
@@ -563,8 +574,7 @@ impl StateDensityMatrix {
         &mut self,
         channel: &QuantumChannel,
         target_qubits: &[usize],
-    ) -> Result<(), StateError> {
-        // Prevent structurally duplicating indexes across arrays
+    ) -> Result<&mut Self, StateError> {
         if let Some(dup) = utils::find_duplicate(target_qubits) {
             return Err(StateError::ChannelError(ChannelError::DuplicateQubit(dup)));
         }
@@ -584,34 +594,34 @@ impl StateDensityMatrix {
         let dim = self.density_matrix.nrows();
         let num_total_qubits = self.num_qubits;
 
-        // Iteration path processing threads targeting isolated hardware nodes mapping explicitly array loops
+        // rho' = sum_i K_i * rho * K_i†
         let new_rho = channel
             .kraus_ops
             .par_iter()
             .map(|k| {
-                // Left mathematical tracing limiting local iterations mapping loops explicitly: rho_temp = K_i * rho
+                // rho_temp = K_i * rho
                 let rho_temp = utils::apply_local_left(
                     num_total_qubits,
                     &self.density_matrix,
                     k,
                     target_qubits,
-                    &[], // Noise boundaries strictly apply unstructured
+                    &[],
                 );
 
-                // Right mapping iteration structurally bounds memory according to representations mapping values
+                // K_i†
                 let k_dagger = k.t().mapv(|c| c.conj());
 
-                // Tracing backwards processing loops implicitly mapping limits explicitly tracking structurally
+                // K_i * rho * K_i†
                 utils::apply_local_right(num_total_qubits, &rho_temp, &k_dagger, target_qubits, &[])
             })
             .reduce(
-                || Array2::<Complex64>::zeros((dim, dim)), // Trace map iteration zero bounding initialization
-                |acc, term| acc + term, // Binds memory tracking iterations looping boundaries maps explicitly
+                || Array2::<Complex64>::zeros((dim, dim)),
+                |acc, term| acc + term,
             );
 
         self.density_matrix = new_rho;
 
-        Ok(())
+        Ok(self)
     }
 
     /// Composes this state with an ancilla state using the Kronecker tensor product.
@@ -649,7 +659,6 @@ impl StateDensityMatrix {
             utils::kronecker_product_matrix(&self.density_matrix, &ancilla_state.density_matrix);
         let composite_num_qubits = self.num_qubits + ancilla_state.num_qubits;
 
-        // Output new mathematical representations explicitly mapping iterations structurally extending hardware limitations
         Ok(StateDensityMatrix {
             density_matrix: composite_matrix,
             num_qubits: composite_num_qubits,
@@ -960,11 +969,7 @@ mod tests {
         // The density matrix for (|00> + |11>)/sqrt(2)
         // Indices [0,0], [0,3], [3,0], [3,3] should be 0.5
         for ((i, j), &val) in state.density_matrix.indexed_iter() {
-            let expected = if (i == 0 && j == 0)
-                || (i == 0 && j == 3)
-                || (i == 3 && j == 0)
-                || (i == 3 && j == 3)
-            {
+            let expected = if (i == 3 || i == 0) && (j == 3 || j == 0) {
                 0.5
             } else {
                 0.0
@@ -985,11 +990,7 @@ mod tests {
             .unwrap();
 
         for ((i, j), &val) in state.density_matrix.indexed_iter() {
-            let expected = if (i == 0 && j == 0)
-                || (i == 0 && j == 3)
-                || (i == 3 && j == 0)
-                || (i == 3 && j == 3)
-            {
+            let expected = if (i == 3 || i == 0) && (j == 3 || j == 0) {
                 0.5
             } else {
                 0.0
@@ -1119,5 +1120,41 @@ mod tests {
         state.density_matrix = Array2::zeros((2, 2));
         let result = state.measure(&Measurement::z_basis(), &[0]);
         assert!(matches!(result, Err(StateError::InvalidTrace(_))));
+    }
+
+    #[test]
+    fn test_apply_controlled_duplicate_targets() {
+        let mut state = StateDensityMatrix::new(2);
+        let result = state.apply_controlled(&Gate::swap(), &[0, 0], &[]);
+        assert!(matches!(
+            result,
+            Err(StateError::GateError(GateError::DuplicateQubit(0)))
+        ));
+    }
+
+    #[test]
+    fn test_apply_controlled_duplicate_controls() {
+        let mut state = StateDensityMatrix::new(3);
+        let result = state.apply_controlled(&Gate::x(), &[2], &[0, 0]);
+        assert!(matches!(
+            result,
+            Err(StateError::GateError(GateError::DuplicateQubit(0)))
+        ));
+    }
+
+    #[test]
+    fn test_apply_controlled_target_control_overlap() {
+        let mut state = StateDensityMatrix::new(2);
+        let result = state.apply_controlled(&Gate::x(), &[0], &[0]);
+        assert!(matches!(
+            result,
+            Err(StateError::GateError(GateError::ControlTargetOverlap(0)))
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "Number of qubits must be at least 1")]
+    fn test_new_zero_qubits() {
+        StateDensityMatrix::new(0);
     }
 }
