@@ -59,7 +59,7 @@ pub struct Bbm92Result {
 /// use qcrypto::QuantumChannel;
 ///
 /// let channel = QuantumChannel::bit_flip(0.0);
-/// let result = bbm92::run(100, &channel, 0.0, 0.5).unwrap();
+/// let result = bbm92::run(100, &channel, &channel, 0.0, 0.5).unwrap();
 ///
 /// assert_eq!(result.raw_length, 100);
 /// ```
