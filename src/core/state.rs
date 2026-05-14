@@ -282,13 +282,13 @@ impl QuantumState {
         &mut self,
         channel: &QuantumChannel,
         target_qubits: &[usize],
-    ) -> Result<(), StateError> {
+    ) -> Result<&mut Self, StateError> {
         if !self.state.try_apply_channel(channel, target_qubits)? {
             let mut dm = self.state.as_density_matrix()?;
             dm.apply_channel(channel, target_qubits)?;
             self.state = Box::new(dm);
         }
-        Ok(())
+        Ok(self)
     }
 
     /// Composes the current quantum state with an ancilla state via the tensor product.
