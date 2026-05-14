@@ -75,6 +75,7 @@ pub fn run(
 
         // Sends (a XOR b) to Bob. Bob obtains 'b' using 'a'.
 
+        // Challenge Generation
         //Bob generates the secret state |psi>
         let mut state = QuantumState::new(1);
 
@@ -86,7 +87,7 @@ pub fn run(
             state.apply(&Gate::h(), &[0])?;
         }
 
-        // Bob generats random challenge 'c'
+        // Bob generates random challenge 'c'
         let c_bit = crate::rng::random_bool(0.5);
         c_vec.push(c_bit);
 
@@ -103,7 +104,7 @@ pub fn run(
         // Bob sends |psi'> to Alice
         state.apply_channel(channel, &[0])?;
 
-        // --- FASE 3: RESPUESTA (ALICE) ---
+        // Proof Generation
         // Alice applies gates in order: Z_b -> H_(a XOR b) -> Z_a
 
         if b_bit {
@@ -122,17 +123,17 @@ pub fn run(
         state.apply_channel(channel, &[0])?;
 
         // Bob's verification
-        // Bob measures using a for basis
+        // Bob measures using `a` bits as basis
         let measurement = if a_bit {
             Measurement::x_basis()
         } else {
             Measurement::z_basis()
         };
 
-        let res = state.measure(&measurement, &[0])?;
+        let result = state.measure(&measurement, &[0])?;
 
         // Bob recovers c'
-        let measured_bit = res.index == 1;
+        let measured_bit = result.index == 1;
 
         let c_prime = measured_bit ^ b_bit; //  "b XOR c' XOR b = c'"
         c_recovered_vec.push(c_prime);
@@ -142,7 +143,7 @@ pub fn run(
         }
     }
 
-    // Accpetance criterion
+    // Acceptance criterion
     let accuracy = matches as f64 / num_qubits as f64;
     let authenticated = accuracy >= acceptance_threshold;
 
