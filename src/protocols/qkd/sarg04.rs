@@ -140,10 +140,9 @@ pub fn run(
             // Orthogonal only to Alice's actual state -> Bob decodes the partner's bit.
             // Cannot happen noiselessly; under noise/Eve it typically yields the wrong bit.
             (true, false) => Some(partner_bit),
-            // Inconclusive: outcome compatible with both announced states.
-            (false, false) => None,
-            // Impossible: the announced pair is non-orthogonal by construction.
-            (true, true) => unreachable!("SARG04 announced pair is non-orthogonal"),
+            // (false, false): inconclusive, outcome compatible with both announced states.
+            // (true, true): logically impossible since the announced pair is non-orthogonal.
+            _ => None,
         };
 
         alice_bits.push(a_bit);

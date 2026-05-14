@@ -333,4 +333,9 @@ mod tests {
         let r = s.measure(&m, &[0]).unwrap();
         assert_eq!(r.index, 0);
     }
+
+    #[test]
+    fn test_calculate_correlation_empty() {
+        assert_eq!(calculate_correlation(&[], &[], &[]), 0.0);
+    }
 }

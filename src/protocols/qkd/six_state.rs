@@ -111,10 +111,9 @@ pub fn run(
 
             let e_basis = crate::rng::random_usize_range(0, 3);
             let measurement = match e_basis {
-                0 => Measurement::z_basis(),
                 1 => Measurement::x_basis(),
                 2 => Measurement::y_basis(),
-                _ => unreachable!(),
+                _ => Measurement::z_basis(),
             };
 
             state.measure(&measurement, &[0])?;
@@ -126,10 +125,9 @@ pub fn run(
         // Bob measures
         let b_basis = crate::rng::random_usize_range(0, 3);
         let measurement = match b_basis {
-            0 => Measurement::z_basis(),
             1 => Measurement::x_basis(),
             2 => Measurement::y_basis(),
-            _ => unreachable!(),
+            _ => Measurement::z_basis(),
         };
 
         let res = state.measure(&measurement, &[0])?;
