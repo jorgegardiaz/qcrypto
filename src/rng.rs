@@ -116,6 +116,32 @@ pub fn random_f64_range(min: f64, max: f64) -> f64 {
     QCRYPTO_RNG.with(|rng| rng.borrow_mut().random_range(min..max))
 }
 
+/// Generates a random integer in the half-open range `[min, max)`.
+///
+/// This uses the thread-local RNG sequence, making it deterministic if `set_global_seed`
+/// was called on the current thread.
+///
+/// # Arguments
+///
+/// * `min` - The minimum value (inclusive).
+/// * `max` - The maximum value (exclusive).
+///
+/// # Returns
+///
+/// A uniformly distributed `usize` between `min` and `max`.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::rng::{set_global_seed, random_usize_range};
+///
+/// set_global_seed(42);
+/// let random_val = random_usize_range(0, 3);
+/// assert!(random_val < 3);
+/// ```
+pub fn random_usize_range(min: usize, max: usize) -> usize {
+    QCRYPTO_RNG.with(|rng| rng.borrow_mut().random_range(min..max))
+}
+
 /// Shuffles a mutable slice randomly using the thread-local RNG.
 ///
 /// This sequence is deterministic if the thread was seeded using `set_global_seed`.
@@ -166,7 +192,7 @@ mod tests {
     #[test]
     fn test_random_f64() {
         let val = random_f64();
-        assert!(val >= 0.0 && val < 1.0);
+        assert!((0.0..1.0).contains(&val));
     }
 
     #[test]
@@ -186,6 +212,27 @@ mod tests {
 
         set_global_seed(999);
         let val2 = random_f64_range(min, max);
+
+        assert_eq!(val1, val2);
+    }
+
+    #[test]
+    fn test_random_usize_range() {
+        let min = 1;
+        let max = 10;
+
+        for _ in 0..1000 {
+            let val = random_usize_range(min, max);
+            assert!(val >= min && val < max);
+        }
+
+        let max2 = 100;
+        // Check determinism
+        set_global_seed(42);
+        let val1 = random_usize_range(min, max2);
+
+        set_global_seed(42);
+        let val2 = random_usize_range(min, max2);
 
         assert_eq!(val1, val2);
     }
