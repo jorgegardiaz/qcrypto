@@ -111,11 +111,7 @@ impl QuantumChannel {
             .flat_map(|op_b| self.kraus_ops.iter().map(move |op_a| op_b.dot(op_a)))
             .collect();
 
-        // Returns a diferent QuantumChannel
-        Ok(QuantumChannel {
-            kraus_ops: new_ops,
-            num_qubits: self.num_qubits,
-        })
+        QuantumChannel::new(new_ops)
     }
 
     /// Mixes the current `QuantumChannel` with another one with probability `p`.
@@ -163,11 +159,7 @@ impl QuantumChannel {
             .chain(other.kraus_ops.iter().map(|op| op * scale_other))
             .collect();
 
-        // Returns a different QuantumChannel
-        Ok(QuantumChannel {
-            kraus_ops: new_kraus_ops,
-            num_qubits: self.num_qubits,
-        })
+        QuantumChannel::new(new_kraus_ops)
     }
 
     /// Expands the channel's operators to act on a larger system.
