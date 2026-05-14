@@ -1,4 +1,4 @@
-use crate::core::errors::{MeasurementError, StateError};
+use crate::core::errors::{GateError, MeasurementError, StateError};
 use crate::core::state::density::StateDensityMatrix;
 use crate::core::state::{
     GateApplicable, Measurable, PurityComputable, QuantumStateImpl, Validatable,
@@ -50,6 +50,10 @@ impl StateVector {
     /// }
     /// ```
     pub fn new(num_qubits: usize) -> Self {
+        assert!(
+            num_qubits > 0,
+            "Number of qubits must be at least 1, got 0"
+        );
         let dim = 1 << num_qubits;
         let mut amplitudes = Array1::<Complex64>::zeros(dim);
         amplitudes[0] = Complex64::new(1.0, 0.0);
@@ -198,6 +202,20 @@ impl StateVector {
 
         for &q in control_qubits {
             self.validate_qubit_index(q)?;
+        }
+
+        if let Some(dup) = utils::find_duplicate(target_qubits) {
+            return Err(GateError::DuplicateQubit(dup).into());
+        }
+
+        if let Some(dup) = utils::find_duplicate(control_qubits) {
+            return Err(GateError::DuplicateQubit(dup).into());
+        }
+
+        for &c in control_qubits {
+            if target_qubits.contains(&c) {
+                return Err(GateError::ControlTargetOverlap(c).into());
+            }
         }
 
         // Apply local operator over specific target qubits using the underlying utils engine
@@ -733,5 +751,41 @@ mod tests {
         state.amplitudes = ndarray::Array1::zeros(2);
         let result = state.measure(&Measurement::z_basis(), &[0]);
         assert!(matches!(result, Err(StateError::InvalidTrace(_))));
+    }
+
+    #[test]
+    fn test_apply_controlled_duplicate_targets() {
+        let mut state = StateVector::new(2);
+        let result = state.apply_controlled(&Gate::swap(), &[0, 0], &[]);
+        assert!(matches!(
+            result,
+            Err(StateError::GateError(GateError::DuplicateQubit(0)))
+        ));
+    }
+
+    #[test]
+    fn test_apply_controlled_duplicate_controls() {
+        let mut state = StateVector::new(3);
+        let result = state.apply_controlled(&Gate::x(), &[2], &[0, 0]);
+        assert!(matches!(
+            result,
+            Err(StateError::GateError(GateError::DuplicateQubit(0)))
+        ));
+    }
+
+    #[test]
+    fn test_apply_controlled_target_control_overlap() {
+        let mut state = StateVector::new(2);
+        let result = state.apply_controlled(&Gate::x(), &[0], &[0]);
+        assert!(matches!(
+            result,
+            Err(StateError::GateError(GateError::ControlTargetOverlap(0)))
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "Number of qubits must be at least 1")]
+    fn test_new_zero_qubits() {
+        StateVector::new(0);
     }
 }
