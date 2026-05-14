@@ -7,6 +7,7 @@ use std::f64::consts::PI;
 /// Represents a quantum gate.
 ///
 /// A gate is defined by its unitary matrix and the number of qubits it acts on.
+#[derive(Clone, Debug)]
 pub struct Gate {
     /// The unitary matrix of the gate.
     pub matrix: Array2<Complex64>,
