@@ -76,7 +76,39 @@ An implementation of B92 utilizing generalized measurements for **Unambiguous St
 * **Mechanism:** Constructs the optimal POVM such that inconclusive results are explicitly handled.
 * **Yield:** Achieves the optimal theoretical sifting rate (approx. 29.3% for standard non-orthogonal states), strictly outperforming standard projective measurements in a noiseless channel.
 
-### 3. QIA-QZKP (Garcia-Diaz et al., 2025)
+### 3. BBM92 (Bennett, Brassard & Mermin, 1992)
+
+An entanglement-based QKD protocol that adapts BB84 to work with a source of entangled pairs instead of prepared single-qubit states.
+
+* **Mechanism:** A source distributes EPR pairs in the Bell state $|\Phi^+\rangle$. Alice and Bob each measure their qubit independently in a randomly chosen basis (Z or X). Sifting keeps only rounds where both chose the same basis, producing perfectly correlated key bits.
+* **Security:** Eavesdropping disturbs the entangled state and raises the QBER above the noise floor, detectable through sacrificed check bits.
+* **Sifting rate:** ~50% of raw pairs survive sifting, matching BB84's rate.
+
+### 4. E91 (Ekert, 1991)
+
+An entanglement-based QKD protocol whose security is grounded in Bell's inequality rather than information-theoretic arguments alone.
+
+* **Mechanism:** A source distributes singlet pairs $|\Psi^-\rangle$. Alice measures in one of three angles ($0, \pi/8, \pi/4$) and Bob in one of three angles ($\pi/8, \pi/4, 3\pi/8$). Pairs where Alice and Bob shared a physical angle are sifted into the key (anticorrelated outcomes, so Bob flips his bits). The remaining pairs are used to evaluate the **CHSH inequality** ($|S| \leq 2$ classically; $|S| = 2\sqrt{2}$ for a perfect singlet).
+* **Security:** Any intercept-and-resend attack collapses the entanglement, reducing the CHSH value toward the classical limit and raising the QBER.
+* **Sifting rate:** ~33% of raw pairs contribute to the key.
+
+### 5. SARG04 (Scarani, Acín, Ribordy & Gisin, 2004)
+
+A QKD protocol that reuses BB84's four states but replaces basis announcement with a pair-announcement sifting scheme, providing stronger resistance against photon-number-splitting (PNS) attacks.
+
+* **Mechanism:** Alice prepares one of $\{|0\rangle, |1\rangle, |+\rangle, |-\rangle\}$. Instead of announcing her basis, she announces a pair of non-orthogonal states — one from each basis — that contains her transmitted state. Bob's outcome is conclusive only when it is orthogonal to exactly one of the two announced states; the decoded bit is then determined by the *other* state in the pair.
+* **Security advantage:** The PNS attack requires Eve to distinguish between non-orthogonal states, which is harder than the basis-guessing attack against BB84.
+* **Sifting rate:** ~25% of qubits yield conclusive decoding in the noiseless case.
+
+### 6. Six-State (Pasquinucci & Gisin, 1999)
+
+An extension of BB84 that uses **three mutually unbiased bases** (Z, X, and Y) instead of two, increasing the information cost of any eavesdropping strategy.
+
+* **Mechanism:** Alice prepares qubits in one of six states: $|0\rangle, |1\rangle$ (Z basis), $|+\rangle, |-\rangle$ (X basis), $|{+i}\rangle, |{-i}\rangle$ (Y basis). Bob measures in a randomly chosen basis. Only rounds where both chose the same basis are kept.
+* **Security advantage:** The optimal intercept-and-resend QBER is $1/3$ (vs. $1/4$ for BB84), making eavesdropping easier to detect.
+* **Sifting rate:** ~33% of qubits survive sifting.
+
+### 7. QIA-QZKP (Garcia-Diaz et al., 2025)
 
 A reference implementation of the protocol described in *"Conjugate Coding Based Designated Verifier Quantum Zero Knowledge Proof for User Authentication"*.
 
@@ -95,7 +127,7 @@ This protocol establishes a Quantum Zero-Knowledge Proof (QZKP) for identity aut
 ### Simulating a Noisy Channel with Density Matrices
 
 ```rust
-use qcrypto::{QuantumState, Gate, Measurement, QuantumChannel, errors::*};
+use qcrypto::{Gate, Measurement, QuantumChannel, QuantumState};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Initialize a pure qubit state |0><0|
@@ -108,7 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // This transforms the pure state into a mixed state.
     let channel = QuantumChannel::amplitude_damping(0.3);
     rho.apply_channel(&channel, &[0])?;
-    println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
+    println!("State Purity (Tr(rho^2)): {:.4}", rho.purity());
     // Purity will be < 1.0 due to the non-unitary channel evolution.
 
     // 4. Measure in the Z basis
@@ -116,7 +148,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let outcome = rho.measure(&measurement, &[0])?;
 
     println!("Measurement Outcome: {}", outcome.index);
-    println!("State Purity (Tr(rho^2)): {:.4}", rho.purity()); 
+    println!("State Purity (Tr(rho^2)): {:.4}", rho.purity());
     // Purity will be 1.0 because it has been projected to a pure state
 
     Ok(())
@@ -126,21 +158,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ### Running the QIA-QZKP Protocol
 
 ```rust
+use qcrypto::QuantumChannel;
 use qcrypto::protocols::qia_qzkp;
-use qcrypto::{QuantumChannel, errors::*};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let n_qubits = 1024;
-    let threshold = 0.85; // Acceptance threshold based on expected QBER
-    
+    let threshold = 0.8; // Acceptance threshold based on expected QBER
+
     // Simulate a realistic channel with 5% noise
-    let noisy_channel = QuantumChannel::bit_flip(0.05);
+    let noisy_channel = QuantumChannel::bit_flip(0.1);
 
     let result = qia_qzkp::run(n_qubits, &noisy_channel, threshold)?;
 
     println!("Protocol Accuracy: {:.2}%", result.accuracy * 100.0);
     println!("Authenticated: {}", result.authenticated);
-    
     Ok(())
 }
 ```
@@ -153,18 +184,20 @@ For testing and research, it is often critical to perfectly reproduce a specific
 use qcrypto::protocols::qkd::bbm92;
 use qcrypto::{QuantumChannel, rng::set_global_seed};
 
-fn main() {
-    let channel = QuantumChannel::depolarizing(0.1);
-    
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let channel_alice = QuantumChannel::depolarizing(0.1);
+    let channel_bob = QuantumChannel::depolarizing(0.05);
+
     // Lock the RNG for this thread to a specific seed
     set_global_seed(42);
-    
-    // Every call to bbm92::run or QuantumState::measure on this thread 
+
+    // Every call to bbm92::run or QuantumState::measure on this thread
     // will now be 100% deterministic and reproducible.
-    let result = bbm92::run(1000, &channel, 0.1, 0.2)?;
-    
+    let result = bbm92::run(1000, &channel_alice, &channel_bob, 1.0, 0.2)?;
+
     // Running this program tomorrow will yield the exact same QBER and key.
     println!("Deterministically reproducible QBER: {:.2}%", result.qber);
+    Ok(())
 }
 ```
 
@@ -173,8 +206,7 @@ fn main() {
 For statistical analysis, it is often necessary to run a protocol multiple times across different parameters (e.g., varying noise levels) and store the results.
 
 ```rust
-use qcrypto::protocols::qkd::bb84;
-use qcrypto::{QuantumChannel, errors::*};
+use qcrypto::{QuantumChannel, protocols::bb84};
 use std::fs::File;
 use std::io::Write;
 
@@ -197,12 +229,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Run the protocol multiple times for each configuration
         for execution in 1..=num_executions {
             let result = bb84::run(num_qubits, &channel, eve_ratio, check_ratio)?;
-            
+
             // Write the extracted data to the CSV
             writeln!(
-                file, 
-                "{:.2},{},{:.2},{}", 
-                noise, execution, result.qber, result.established_key.len()
+                file,
+                "{:.2},{},{:.2},{}",
+                noise, execution, result.qber, result.total_sifted,
             )?;
         }
     }
