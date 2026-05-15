@@ -3,12 +3,14 @@
 //! B92 is a simplified version of BB84 proposed by Charles Bennett in 1992.
 //! It uses only two non-orthogonal quantum states (e.g., |0> and |+>).
 
+use crate::rng::LocalRng;
 use crate::{
     Gate, Measurement, QuantumChannel, QuantumState,
     errors::{MeasurementError, StateError},
 };
 use ndarray::{Array2, arr2};
 use num_complex::Complex64;
+use rayon::prelude::*;
 
 /// The result of the B92 protocol execution.
 pub struct B92Result {
@@ -184,6 +186,117 @@ pub fn run(
     })
 }
 
+/// Parallel variant of [`run`] using rayon.
+///
+/// See [`run`] for protocol semantics. Determinism is preserved when the thread-local
+/// RNG is seeded via [`crate::rng::set_global_seed`] before invocation.
+pub fn run_par(
+    num_qubits: usize,
+    channel: &QuantumChannel,
+    measurement: &Measurement,
+    eve_ratio: f64,
+    check_ratio: f64,
+) -> Result<B92Result, StateError> {
+    let master = crate::rng::draw_master_seed();
+
+    type Step = (bool, i8, bool);
+
+    let steps: Vec<Step> = (0..num_qubits)
+        .into_par_iter()
+        .map(|i| -> Result<Step, StateError> {
+            let mut rng = LocalRng::child(master, i as u64);
+
+            let a_bit = rng.random_bool(0.5);
+            let mut state = QuantumState::new(1);
+            if a_bit {
+                state.apply(&Gate::h(), &[0])?;
+            }
+
+            state.apply_channel(channel, &[0])?;
+
+            let eve_intercepted = eve_ratio > 0.0 && rng.random_bool(eve_ratio);
+            if eve_intercepted {
+                let e_basis = rng.random_bool(0.5);
+                let m = if e_basis {
+                    Measurement::x_basis()
+                } else {
+                    Measurement::z_basis()
+                };
+                let _ = state.measure_with_rng(&m, &[0], &mut rng)?;
+            }
+
+            state.apply_channel(channel, &[0])?;
+
+            let res = state.measure_with_rng(measurement, &[0], &mut rng)?;
+            let res_code = match res.index {
+                0 => 0i8,
+                1 => 1i8,
+                _ => -1i8,
+            };
+
+            Ok((a_bit, res_code, eve_intercepted))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut alice_bits = Vec::with_capacity(num_qubits);
+    let mut bob_results = Vec::with_capacity(num_qubits);
+    let mut eve_intercepted_count = 0usize;
+
+    for (a_bit, res_code, eve_intercepted) in steps {
+        alice_bits.push(a_bit);
+        bob_results.push(res_code);
+        if eve_intercepted {
+            eve_intercepted_count += 1;
+        }
+    }
+
+    let mut conclusive_indices: Vec<usize> = bob_results
+        .iter()
+        .enumerate()
+        .filter_map(|(i, &res)| if res != -1 { Some(i) } else { None })
+        .collect();
+
+    let total_conclusive = conclusive_indices.len();
+    crate::rng::shuffle_slice(&mut conclusive_indices);
+
+    let num_check = (total_conclusive as f64 * check_ratio).round() as usize;
+    let (check_indices, key_indices) = conclusive_indices.split_at(num_check);
+
+    let mut check_errors = 0;
+    for &idx in check_indices {
+        let b_val = bob_results[idx] == 0;
+        if alice_bits[idx] != b_val {
+            check_errors += 1;
+        }
+    }
+
+    let qber = if num_check > 0 {
+        check_errors as f64 / num_check as f64
+    } else {
+        0.0
+    };
+
+    let mut alice_key = Vec::with_capacity(key_indices.len());
+    let mut bob_key = Vec::with_capacity(key_indices.len());
+    for &idx in key_indices {
+        let b_val = bob_results[idx] == 0;
+        alice_key.push(alice_bits[idx]);
+        bob_key.push(b_val);
+    }
+
+    Ok(B92Result {
+        raw_length: num_qubits,
+        conclusive_count: total_conclusive,
+        check_errors,
+        qber,
+        eve_detected_count: eve_intercepted_count,
+        alice_key,
+        bob_key,
+        alice_bits,
+        bob_results,
+    })
+}
+
 /// Constructs the optimal POVM for the B92 protocol.
 ///
 /// The POVM consists of three elements:
@@ -297,5 +410,49 @@ mod tests {
         let measurement = build_optimal_povm_b92().unwrap();
         let result = run(100, &channel, &measurement, 0.0, 0.0).unwrap();
         assert_eq!(result.qber, 0.0);
+    }
+
+    #[test]
+    fn test_b92_par_zero_check() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run_par(100, &channel, &measurement, 0.0, 0.0).unwrap();
+        assert_eq!(result.qber, 0.0);
+    }
+
+    #[test]
+    fn test_b92_par_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run_par(200, &channel, &measurement, 0.0, 0.5).unwrap();
+        assert_eq!(result.raw_length, 200);
+        assert_eq!(result.check_errors, 0);
+        assert_eq!(result.qber, 0.0);
+        assert_eq!(result.eve_detected_count, 0);
+    }
+
+    #[test]
+    fn test_b92_par_deterministic_with_seed() {
+        let channel = QuantumChannel::bit_flip(0.05);
+        let measurement = build_optimal_povm_b92().unwrap();
+
+        crate::rng::set_global_seed(7);
+        let r1 = run_par(300, &channel, &measurement, 0.1, 0.2).unwrap();
+        crate::rng::set_global_seed(7);
+        let r2 = run_par(300, &channel, &measurement, 0.1, 0.2).unwrap();
+
+        assert_eq!(r1.alice_bits, r2.alice_bits);
+        assert_eq!(r1.bob_results, r2.bob_results);
+        assert_eq!(r1.alice_key, r2.alice_key);
+        assert_eq!(r1.bob_key, r2.bob_key);
+    }
+
+    #[test]
+    fn test_b92_par_eve() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let measurement = build_optimal_povm_b92().unwrap();
+        let result = run_par(1000, &channel, &measurement, 1.0, 0.5).unwrap();
+        assert!(result.eve_detected_count > 0);
+        assert!(result.qber > 0.15);
     }
 }

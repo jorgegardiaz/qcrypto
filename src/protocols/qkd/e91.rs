@@ -3,11 +3,13 @@
 //! E91 is an entanglement-based QKD protocol proposed by Ekert in 1991.
 //! It uses entangled photon pairs and Bell's inequality to ensure security.
 
+use crate::rng::LocalRng;
 use crate::{
     Gate, Measurement, QuantumChannel, QuantumState, errors::StateError, utils::outer_product,
 };
 use ndarray::array;
 use num_complex::Complex64;
+use rayon::prelude::*;
 use std::f64::consts::PI;
 
 /// The result of the E91 protocol execution.
@@ -254,6 +256,159 @@ pub fn run(
     })
 }
 
+/// Parallel variant of [`run`] using rayon. See [`run`] for protocol semantics.
+pub fn run_par(
+    num_pairs: usize,
+    channel_alice: &QuantumChannel,
+    channel_bob: &QuantumChannel,
+    eve_ratio: f64,
+    check_ratio: f64,
+) -> Result<E91Result, StateError> {
+    let master = crate::rng::draw_master_seed();
+
+    let a_angles = [0.0, PI / 8.0, PI / 4.0];
+    let b_angles = [PI / 8.0, PI / 4.0, 3.0 * PI / 8.0];
+
+    let a_measurements = [
+        angle_measurement(a_angles[0]),
+        angle_measurement(a_angles[1]),
+        angle_measurement(a_angles[2]),
+    ];
+    let b_measurements = [
+        angle_measurement(b_angles[0]),
+        angle_measurement(b_angles[1]),
+        angle_measurement(b_angles[2]),
+    ];
+
+    type Step = (usize, usize, bool, bool, bool);
+
+    let steps: Vec<Step> = (0..num_pairs)
+        .into_par_iter()
+        .map(|i| -> Result<Step, StateError> {
+            let mut rng = LocalRng::child(master, i as u64);
+
+            let mut state = QuantumState::new(2);
+            state
+                .apply(&Gate::x(), &[0])?
+                .apply(&Gate::h(), &[0])?
+                .apply(&Gate::cnot(), &[0, 1])?
+                .apply(&Gate::x(), &[1])?;
+
+            state
+                .apply_channel(channel_alice, &[0])?
+                .apply_channel(channel_bob, &[1])?;
+
+            let eve_intercepted = eve_ratio > 0.0 && rng.random_bool(eve_ratio);
+            if eve_intercepted {
+                let e_idx = rng.random_usize_range(0, a_measurements.len());
+                let _ = state.measure_with_rng(&a_measurements[e_idx], &[1], &mut rng)?;
+            }
+
+            state.apply_channel(channel_bob, &[1])?;
+
+            let a_idx = rng.random_usize_range(0, a_measurements.len());
+            let b_idx = rng.random_usize_range(0, b_measurements.len());
+
+            let res_a = state.measure_with_rng(&a_measurements[a_idx], &[0], &mut rng)?;
+            let res_b = state.measure_with_rng(&b_measurements[b_idx], &[1], &mut rng)?;
+
+            Ok((
+                a_idx,
+                b_idx,
+                res_a.index == 1,
+                res_b.index == 1,
+                eve_intercepted,
+            ))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let mut alice_bits = Vec::with_capacity(num_pairs);
+    let mut alice_bases = Vec::with_capacity(num_pairs);
+    let mut bob_bases = Vec::with_capacity(num_pairs);
+    let mut bob_results = Vec::with_capacity(num_pairs);
+    let mut eve_intercept_count = 0usize;
+
+    for (a_idx, b_idx, a_bit, b_bit, eve_intercepted) in steps {
+        alice_bits.push(a_bit);
+        bob_results.push(b_bit);
+        alice_bases.push(a_idx);
+        bob_bases.push(b_idx);
+        if eve_intercepted {
+            eve_intercept_count += 1;
+        }
+    }
+
+    let mut key_indices = Vec::new();
+    let mut bell_00 = Vec::new();
+    let mut bell_02 = Vec::new();
+    let mut bell_20 = Vec::new();
+    let mut bell_22 = Vec::new();
+
+    for i in 0..num_pairs {
+        let (a_idx, b_idx) = (alice_bases[i], bob_bases[i]);
+        if (a_idx == 1 && b_idx == 0) || (a_idx == 2 && b_idx == 1) {
+            key_indices.push(i);
+        } else if a_idx == 0 && b_idx == 0 {
+            bell_00.push(i);
+        } else if a_idx == 0 && b_idx == 2 {
+            bell_02.push(i);
+        } else if a_idx == 2 && b_idx == 0 {
+            bell_20.push(i);
+        } else if a_idx == 2 && b_idx == 2 {
+            bell_22.push(i);
+        }
+    }
+
+    let total_sifted = key_indices.len();
+
+    let e00 = calculate_correlation(&bell_00, &alice_bits, &bob_results);
+    let e02 = calculate_correlation(&bell_02, &alice_bits, &bob_results);
+    let e20 = calculate_correlation(&bell_20, &alice_bits, &bob_results);
+    let e22 = calculate_correlation(&bell_22, &alice_bits, &bob_results);
+    let chsh_value = e00 - e02 + e20 + e22;
+
+    crate::rng::shuffle_slice(&mut key_indices);
+
+    let num_check = (total_sifted as f64 * check_ratio).round() as usize;
+    let num_check = num_check.min(total_sifted);
+    let (check_indices, actual_key_indices) = key_indices.split_at(num_check);
+
+    let mut check_errors = 0;
+    for &i in check_indices {
+        if alice_bits[i] == bob_results[i] {
+            check_errors += 1;
+        }
+    }
+
+    let qber = if num_check > 0 {
+        Some(check_errors as f64 / num_check as f64)
+    } else {
+        None
+    };
+
+    let mut alice_key = Vec::with_capacity(actual_key_indices.len());
+    let mut bob_key = Vec::with_capacity(actual_key_indices.len());
+    for &i in actual_key_indices {
+        alice_key.push(alice_bits[i]);
+        bob_key.push(!bob_results[i]);
+    }
+
+    Ok(E91Result {
+        raw_length: num_pairs,
+        total_sifted,
+        check_errors,
+        qber,
+        chsh_value,
+        eve_intercept_count,
+        alice_bases,
+        bob_bases,
+        alice_bits,
+        bob_results,
+        alice_key,
+        bob_key,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -326,6 +481,13 @@ mod tests {
     }
 
     #[test]
+    fn test_e91_par_zero_check() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run_par(100, &channel, &channel, 0.0, 0.0).unwrap();
+        assert_eq!(result.qber, None);
+    }
+
+    #[test]
     fn test_e91_basis_measurement_convention() {
         // Sanity check: |0> measured in the theta=0 basis must yield index 0.
         let m = angle_measurement(0.0);
@@ -337,5 +499,44 @@ mod tests {
     #[test]
     fn test_calculate_correlation_empty() {
         assert_eq!(calculate_correlation(&[], &[], &[]), 0.0);
+    }
+
+    #[test]
+    fn test_e91_par_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run_par(2000, &channel, &channel, 0.0, 0.5).unwrap();
+        assert_eq!(result.raw_length, 2000);
+        assert_eq!(result.check_errors, 0);
+        assert_eq!(result.qber, Some(0.0));
+        assert_eq!(result.alice_key, result.bob_key);
+        assert!(
+            (result.chsh_value + 2.0 * 2.0_f64.sqrt()).abs() < 0.3,
+            "CHSH value {} too far from -2.828",
+            result.chsh_value
+        );
+    }
+
+    #[test]
+    fn test_e91_par_deterministic_with_seed() {
+        let channel = QuantumChannel::bit_flip(0.05);
+
+        crate::rng::set_global_seed(99);
+        let r1 = run_par(300, &channel, &channel, 0.1, 0.2).unwrap();
+        crate::rng::set_global_seed(99);
+        let r2 = run_par(300, &channel, &channel, 0.1, 0.2).unwrap();
+
+        assert_eq!(r1.alice_bits, r2.alice_bits);
+        assert_eq!(r1.bob_results, r2.bob_results);
+        assert_eq!(r1.alice_key, r2.alice_key);
+        assert_eq!(r1.bob_key, r2.bob_key);
+        assert_eq!(r1.chsh_value, r2.chsh_value);
+    }
+
+    #[test]
+    fn test_e91_par_noisy() {
+        let channel = QuantumChannel::bit_flip(0.2); // High noise
+        let result = run_par(500, &channel, &channel, 0.0, 0.5).unwrap();
+        assert!(result.check_errors > 0);
+        assert!(result.qber.unwrap() > 0.0);
     }
 }
