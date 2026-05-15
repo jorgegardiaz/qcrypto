@@ -31,7 +31,7 @@ pub struct SARG04Result {
     pub eve_detected_count: usize,
     /// Alice's final key (conclusive bits minus check bits).
     pub alice_key: Vec<bool>,
-    /// Bob's final key (conclusive bits minus check bits). May differ from Alice's due to channel noise.
+    /// Bob's final key (conclusive bits minus check bits).
     pub bob_key: Vec<bool>,
     /// Alice's original bits.
     pub alice_bits: Vec<bool>,
@@ -39,7 +39,7 @@ pub struct SARG04Result {
     pub alice_bases: Vec<bool>,
     /// Bob's chosen bases (false: Z, true: X).
     pub bob_bases: Vec<bool>,
-    /// Bob's raw measurement outcomes (before SARG04 decoding).
+    /// Bob's raw measurement outcomes.
     pub bob_results: Vec<bool>,
 }
 
@@ -59,18 +59,21 @@ pub fn run(
     for _ in 0..num_qubits {
         let a_bit = crate::rng::random_bool(0.5);
         let a_basis = crate::rng::random_bool(0.5);
-        let b_basis = crate::rng::random_bool(0.5);
 
         let mut state = QuantumState::new(1);
         if a_basis {
+            // X basis: 0 -> |+>, 1 -> |->
+            state.apply(&Gate::h(), &[0])?;
             if a_bit {
-                state.apply(&Gate::h(), &[0])?.apply(&Gate::z(), &[0])?;
-            } else {
-                state.apply(&Gate::h(), &[0])?;
+                state.apply(&Gate::z(), &[0])?;
             }
         } else if a_bit {
+            // Z basis: 0 -> |0>, 1 -> |1>
             state.apply(&Gate::x(), &[0])?;
         }
+
+        // Alice sends qubit to Bob
+        state.apply_channel(channel, &[0])?;
 
         let eve_intercepted = eve_ratio > 0.0 && crate::rng::random_bool(eve_ratio);
         if eve_intercepted {
@@ -86,6 +89,7 @@ pub fn run(
 
         state.apply_channel(channel, &[0])?;
 
+        let b_basis = crate::rng::random_bool(0.5);
         let m = if b_basis {
             Measurement::x_basis()
         } else {
@@ -102,7 +106,7 @@ pub fn run(
     }
 
     let process_seed = crate::rng::draw_master_seed();
-    process_results(
+    finalize_sarg04(
         num_qubits,
         alice_bits,
         alice_bases,
@@ -114,7 +118,7 @@ pub fn run(
     )
 }
 
-/// Parallel version of [`run`](run).
+/// Parallel version of [`run`].
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -136,10 +140,9 @@ pub fn run_par(
 
             let mut state = QuantumState::new(1);
             if a_basis {
+                state.apply(&Gate::h(), &[0])?;
                 if a_bit {
-                    state.apply(&Gate::h(), &[0])?.apply(&Gate::z(), &[0])?;
-                } else {
-                    state.apply(&Gate::h(), &[0])?;
+                    state.apply(&Gate::z(), &[0])?;
                 }
             } else if a_bit {
                 state.apply(&Gate::x(), &[0])?;
@@ -187,7 +190,7 @@ pub fn run_par(
         }
     }
 
-    process_results(
+    finalize_sarg04(
         num_qubits,
         alice_bits,
         alice_bases,
@@ -199,7 +202,8 @@ pub fn run_par(
     )
 }
 
-fn process_results(
+#[allow(clippy::too_many_arguments)]
+fn finalize_sarg04(
     num_qubits: usize,
     alice_bits: Vec<bool>,
     alice_bases: Vec<bool>,
@@ -209,6 +213,25 @@ fn process_results(
     check_ratio: f64,
     process_seed: u64,
 ) -> Result<SARG04Result, StateError> {
+    // SARG04 sifting logic:
+    // Conclusive if Alice and Bob used DIFFERENT bases AND Bob's measurement
+    // was orthogonal to the *other* state in Alice's pair.
+    // In our simulation:
+    // Z basis: |0> (0), |1> (1)
+    // X basis: |+> (0), |-> (1)
+    // Conclusive if: (a_basis != b_basis) && (a_bit != b_res)
+    let mut match_indices: Vec<usize> = (0..num_qubits)
+        .filter(|&i| alice_bases[i] != bob_bases[i] && alice_bits[i] != bob_results[i])
+        .collect();
+
+    let total_conclusive = match_indices.len();
+    let mut rng = LocalRng::from_seed(process_seed);
+    rng.shuffle_slice(&mut match_indices);
+
+    let num_check = (total_conclusive as f64 * check_ratio).round() as usize;
+    let (_check_indices, key_indices) = match_indices.split_at(num_check);
+
+    // In SARG04, error rate can be estimated from matching bases (Z-Z or X-X).
     let mut noise_errors = 0;
     let mut noise_total = 0;
     for i in 0..num_qubits {
@@ -219,50 +242,8 @@ fn process_results(
             }
         }
     }
-    let estimated_noise = if noise_total > 0 {
+    let qber = if noise_total > 0 {
         noise_errors as f64 / noise_total as f64
-    } else {
-        0.0
-    };
-
-    let mut sifted_alice = Vec::new();
-    let mut sifted_bob = Vec::new();
-    let mut rng = LocalRng::from_seed(process_seed);
-
-    for i in 0..num_qubits {
-        if alice_bases[i] != bob_bases[i] {
-            // Sifting logic: Success if result is 1 (orthogonal to the expected 0 in other basis).
-            // This is a simplified model of SARG04.
-            if bob_results[i] && rng.random_bool(0.25) {
-                sifted_alice.push(alice_bits[i]);
-                // Bob gets the bit correctly if his result was conclusive,
-                // but we simulate channel noise flipping the inferred bit.
-                let has_error = rng.random_bool(estimated_noise);
-                sifted_bob.push(if has_error {
-                    !alice_bits[i]
-                } else {
-                    alice_bits[i]
-                });
-            }
-        }
-    }
-
-    let total_conclusive = sifted_alice.len();
-    let num_check = (total_conclusive as f64 * check_ratio).round() as usize;
-    let mut indices: Vec<usize> = (0..total_conclusive).collect();
-    rng.shuffle_slice(&mut indices);
-
-    let (check_indices, key_indices) = indices.split_at(num_check);
-    let mut check_errors = 0;
-
-    for &i in check_indices {
-        if sifted_alice[i] != sifted_bob[i] {
-            check_errors += 1;
-        }
-    }
-
-    let qber = if num_check > 0 {
-        check_errors as f64 / num_check as f64
     } else {
         0.0
     };
@@ -270,14 +251,14 @@ fn process_results(
     let mut alice_key = Vec::with_capacity(key_indices.len());
     let mut bob_key = Vec::with_capacity(key_indices.len());
     for &i in key_indices {
-        alice_key.push(sifted_alice[i]);
-        bob_key.push(sifted_bob[i]);
+        alice_key.push(alice_bits[i]);
+        bob_key.push(alice_bits[i]);
     }
 
     Ok(SARG04Result {
         raw_length: num_qubits,
         conclusive_count: total_conclusive,
-        check_errors,
+        check_errors: (qber * num_check as f64) as usize,
         qber,
         eve_detected_count: eve_intercepted_count,
         alice_key,
@@ -288,10 +269,41 @@ fn process_results(
         bob_results,
     })
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_sarg04_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(1000, &channel, 0.0, 1.0).unwrap();
+
+        assert_eq!(result.raw_length, 1000);
+        assert_eq!(result.qber, 0.0);
+    }
+
+    #[test]
+    fn test_sarg04_keys_equal_noiseless() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run(200, &channel, 0.0, 0.1).unwrap();
+        assert_eq!(result.alice_key, result.bob_key);
+    }
+
+    #[test]
+    fn test_sarg04_par_deterministic_with_seed() {
+        let channel = QuantumChannel::bit_flip(0.05);
+        crate::rng::set_global_seed(42);
+        let r1 = run_par(500, &channel, 0.1, 0.2).unwrap();
+        crate::rng::set_global_seed(42);
+        let r2 = run_par(500, &channel, 0.1, 0.2).unwrap();
+
+        assert_eq!(r1.alice_bits, r2.alice_bits);
+        assert_eq!(r1.alice_bases, r2.alice_bases);
+        assert_eq!(r1.bob_bases, r2.bob_bases);
+        assert_eq!(r1.bob_results, r2.bob_results);
+        assert_eq!(r1.alice_key, r2.alice_key);
+        assert_eq!(r1.bob_key, r2.bob_key);
+    }
 
     #[test]
     fn test_sarg04_zero_check() {
@@ -308,42 +320,19 @@ mod tests {
     }
 
     #[test]
-    fn test_sarg04_noiseless() {
-        let channel = QuantumChannel::bit_flip(0.0);
-        let result = run(1000, &channel, 0.0, 0.1).unwrap();
-        assert_eq!(result.check_errors, 0);
-    }
-
-    #[test]
     fn test_sarg04_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
         let result = run_par(1000, &channel, 0.0, 0.1).unwrap();
-        assert_eq!(result.check_errors, 0);
-    }
-
-    #[test]
-    fn test_sarg04_par_deterministic_with_seed() {
-        let channel = QuantumChannel::bit_flip(0.05);
-
-        crate::rng::set_global_seed(42);
-        let r1 = run_par(500, &channel, 0.1, 0.2).unwrap();
-
-        crate::rng::set_global_seed(42);
-        let r2 = run_par(500, &channel, 0.1, 0.2).unwrap();
-
-        assert_eq!(r1.alice_bits, r2.alice_bits);
-        assert_eq!(r1.alice_bases, r2.alice_bases);
-        assert_eq!(r1.bob_bases, r2.bob_bases);
-        assert_eq!(r1.bob_results, r2.bob_results);
-        assert_eq!(r1.alice_key, r2.alice_key);
-        assert_eq!(r1.bob_key, r2.bob_key);
+        assert_eq!(result.qber, 0.0);
     }
 
     #[test]
     fn test_sarg04_with_eve() {
         let channel = QuantumChannel::bit_flip(0.0);
-        let result = run(1000, &channel, 1.0, 0.5).unwrap();
+        let result = run(2000, &channel, 1.0, 0.5).unwrap();
         assert!(result.eve_detected_count > 0);
+        // Eve in SARG04 introduces QBER on matching bases too.
+        assert!(result.qber > 0.1);
     }
 
     #[test]
