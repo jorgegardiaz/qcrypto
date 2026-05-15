@@ -32,7 +32,7 @@ The library is implemented in **100% Safe Rust**, eliminating external dependenc
 * **Open Quantum Systems:** Implementation of quantum channels (Bit Flip, Phase Damping, Amplitude Damping, Depolarizing) satisfying the Trace-Preserving condition.
 * **Generalized Measurements:** Support for Positive Operator-Valued Measures (POVM), essential for protocols like B92 and unambiguous state discrimination.
 * **Efficient Operator Expansion:** Native implementation of optimized algorithms avoiding global matrix expansion to perform local tensor updates mathematically.
-* **Reproducible Simulations:** A Thread-Local RNG system (`qcrypto::rng`) allows researchers to lock simulations to deterministic entropy sequences to exactly replicate experimental protocol runs.
+* **Reproducible Simulations:** A RNG system (`qcrypto::rng`) allows researchers to lock simulations to deterministic entropy sequences to exactly replicate experimental protocol runs.
 
 ## Installation
 
@@ -59,7 +59,7 @@ cargo add qcrypto
 
 ## Implemented Protocols
 
-The library includes reference implementations for standard and novel quantum cryptographic schemes.
+The library includes reference implementations for standard and novel quantum cryptographic schemes. All protocols include `run` and  `run_par`, the second one using `rayon` to parallelize sampling instances. For low nomber of qubits (num_qubits < 500) `run` is faster due to the overhead of thread managing on `run_par`.
 
 ### 1. BB84 (Bennett & Brassard, 1984)
 
@@ -193,7 +193,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Every call to bbm92::run or QuantumState::measure on this thread
     // will now be 100% deterministic and reproducible.
-    let result = bbm92::run(1000, &channel_alice, &channel_bob, 1.0, 0.2)?;
+    let result = bbm92::run_par(1000, &channel_alice, &channel_bob, 1.0, 0.2)?;
 
     // Running this program tomorrow will yield the exact same QBER and key.
     println!("Deterministically reproducible QBER: {:.2}%", result.qber);
@@ -228,7 +228,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         // Run the protocol multiple times for each configuration
         for execution in 1..=num_executions {
-            let result = bb84::run(num_qubits, &channel, eve_ratio, check_ratio)?;
+            let result = bb84::run_par(num_qubits, &channel, eve_ratio, check_ratio)?;
 
             // Write the extracted data to the CSV
             writeln!(
@@ -246,7 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## References
 
-If you use this software in your research or project, please cite it using the information in [CITATION](CITATION.cff). Additionally, if you use the QIA-QZKP module in your research, please cite the original paper:
+If you use this software in your research or project, please cite it using the information in [CITATION](CITATION.cff). Additionally, if you use the QIA-QZKP protocol in your research, please cite the original paper:
 
 > Garcia-Diaz, J., Escanez-Exposito, D., Caballero-Gil, P. et al. Conjugate coding based designated verifier quantum zero knowledge proof for user authentication. Cryptogr. Commun. (2026). https://doi.org/10.1007/s12095-026-00878-y
 
