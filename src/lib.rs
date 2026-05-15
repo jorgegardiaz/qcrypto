@@ -20,6 +20,7 @@ pub use crate::core::{
 
 pub use crate::core::state;
 pub use crate::rng::{
-    random_bool, random_f64, random_f64_range, random_usize_range, set_global_seed, shuffle_slice,
+    LocalRng, random_bool, random_f64, random_f64_range, random_usize_range, set_global_seed,
+    shuffle_slice,
 };
 pub use crate::sampler::Sampler;
