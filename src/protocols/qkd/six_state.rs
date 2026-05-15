@@ -202,6 +202,7 @@ pub fn run_par(
     check_ratio: f64,
 ) -> Result<SixStateResult, StateError> {
     let master = crate::rng::draw_master_seed();
+    let process_seed = crate::rng::draw_master_seed();
 
     type Step = (bool, usize, usize, bool, bool);
 
@@ -275,7 +276,8 @@ pub fn run_par(
         .filter(|&i| alice_bases[i] == bob_bases[i])
         .collect();
     let total_sifted = match_indices.len();
-    crate::rng::shuffle_slice(&mut match_indices);
+    let mut rng = LocalRng::from_seed(process_seed);
+    rng.shuffle_slice(&mut match_indices);
 
     let num_check = (total_sifted as f64 * check_ratio).round() as usize;
     let (check_indices, key_indices) = match_indices.split_at(num_check);
@@ -413,5 +415,14 @@ mod tests {
         assert_eq!(r1.bob_results, r2.bob_results);
         assert_eq!(r1.alice_key, r2.alice_key);
         assert_eq!(r1.bob_key, r2.bob_key);
+    }
+
+    #[test]
+    fn test_six_state_par_eve() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run_par(5000, &channel, 1.0, 0.5).unwrap();
+
+        assert!(result.eve_detected_count > 0);
+        assert!((result.qber - 0.333).abs() < 0.06);
     }
 }

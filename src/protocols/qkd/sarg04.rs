@@ -101,6 +101,7 @@ pub fn run(
         bob_results.push(b_res);
     }
 
+    let process_seed = crate::rng::draw_master_seed();
     process_results(
         num_qubits,
         alice_bits,
@@ -109,6 +110,7 @@ pub fn run(
         bob_results,
         eve_intercepted_count,
         check_ratio,
+        process_seed,
     )
 }
 
@@ -120,6 +122,7 @@ pub fn run_par(
     check_ratio: f64,
 ) -> Result<SARG04Result, StateError> {
     let master = crate::rng::draw_master_seed();
+    let process_seed = crate::rng::draw_master_seed();
 
     type Step = (bool, bool, bool, bool, bool);
 
@@ -192,6 +195,7 @@ pub fn run_par(
         bob_results,
         eve_intercepted_count,
         check_ratio,
+        process_seed,
     )
 }
 
@@ -203,6 +207,7 @@ fn process_results(
     bob_results: Vec<bool>,
     eve_intercepted_count: usize,
     check_ratio: f64,
+    process_seed: u64,
 ) -> Result<SARG04Result, StateError> {
     let mut noise_errors = 0;
     let mut noise_total = 0;
@@ -222,7 +227,7 @@ fn process_results(
 
     let mut sifted_alice = Vec::new();
     let mut sifted_bob = Vec::new();
-    let mut rng = LocalRng::from_seed(crate::rng::draw_master_seed());
+    let mut rng = LocalRng::from_seed(process_seed);
 
     for i in 0..num_qubits {
         if alice_bases[i] != bob_bases[i] {
@@ -245,7 +250,7 @@ fn process_results(
     let total_conclusive = sifted_alice.len();
     let num_check = (total_conclusive as f64 * check_ratio).round() as usize;
     let mut indices: Vec<usize> = (0..total_conclusive).collect();
-    crate::rng::shuffle_slice(&mut indices);
+    rng.shuffle_slice(&mut indices);
 
     let (check_indices, key_indices) = indices.split_at(num_check);
     let mut check_errors = 0;
@@ -319,18 +324,19 @@ mod tests {
     #[test]
     fn test_sarg04_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
+
         crate::rng::set_global_seed(42);
         let r1 = run_par(500, &channel, 0.1, 0.2).unwrap();
+
         crate::rng::set_global_seed(42);
         let r2 = run_par(500, &channel, 0.1, 0.2).unwrap();
-        assert_eq!(r1.established_key_len(), r2.established_key_len());
-        assert_eq!(r1.alice_key, r2.alice_key);
-    }
 
-    impl SARG04Result {
-        fn established_key_len(&self) -> usize {
-            self.alice_key.len()
-        }
+        assert_eq!(r1.alice_bits, r2.alice_bits);
+        assert_eq!(r1.alice_bases, r2.alice_bases);
+        assert_eq!(r1.bob_bases, r2.bob_bases);
+        assert_eq!(r1.bob_results, r2.bob_results);
+        assert_eq!(r1.alice_key, r2.alice_key);
+        assert_eq!(r1.bob_key, r2.bob_key);
     }
 
     #[test]

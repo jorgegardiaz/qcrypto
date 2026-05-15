@@ -265,6 +265,7 @@ pub fn run_par(
     check_ratio: f64,
 ) -> Result<E91Result, StateError> {
     let master = crate::rng::draw_master_seed();
+    let process_seed = crate::rng::draw_master_seed();
 
     let a_angles = [0.0, PI / 8.0, PI / 4.0];
     let b_angles = [PI / 8.0, PI / 4.0, 3.0 * PI / 8.0];
@@ -367,7 +368,8 @@ pub fn run_par(
     let e22 = calculate_correlation(&bell_22, &alice_bits, &bob_results);
     let chsh_value = e00 - e02 + e20 + e22;
 
-    crate::rng::shuffle_slice(&mut key_indices);
+    let mut rng = LocalRng::from_seed(process_seed);
+    rng.shuffle_slice(&mut key_indices);
 
     let num_check = (total_sifted as f64 * check_ratio).round() as usize;
     let num_check = num_check.min(total_sifted);

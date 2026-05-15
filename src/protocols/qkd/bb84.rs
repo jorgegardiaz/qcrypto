@@ -197,6 +197,7 @@ pub fn run_par(
     check_ratio: f64,
 ) -> Result<BB84Result, StateError> {
     let master = crate::rng::draw_master_seed();
+    let process_seed = crate::rng::draw_master_seed();
 
     type Step = (bool, bool, bool, bool, bool);
 
@@ -265,7 +266,8 @@ pub fn run_par(
         .collect();
 
     let total_sifted = match_indices.len();
-    crate::rng::shuffle_slice(&mut match_indices);
+    let mut rng = LocalRng::from_seed(process_seed);
+    rng.shuffle_slice(&mut match_indices);
 
     let num_check = (total_sifted as f64 * check_ratio).round() as usize;
     let (check_indices, key_indices) = match_indices.split_at(num_check);

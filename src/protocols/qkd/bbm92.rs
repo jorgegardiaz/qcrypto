@@ -198,6 +198,7 @@ pub fn run_par(
     check_ratio: f64,
 ) -> Result<Bbm92Result, StateError> {
     let master = crate::rng::draw_master_seed();
+    let process_seed = crate::rng::draw_master_seed();
 
     type Step = (bool, bool, bool, bool, bool);
 
@@ -270,7 +271,8 @@ pub fn run_par(
         .filter(|&i| alice_bases[i] == bob_bases[i])
         .collect();
     let total_sifted = match_indices.len();
-    crate::rng::shuffle_slice(&mut match_indices);
+    let mut rng = LocalRng::from_seed(process_seed);
+    rng.shuffle_slice(&mut match_indices);
 
     let num_check = (total_sifted as f64 * check_ratio).round() as usize;
     let (check_indices, key_indices) = match_indices.split_at(num_check);
@@ -395,8 +397,19 @@ mod tests {
         let r2 = run_par(200, &channel, &channel, 0.1, 0.2).unwrap();
 
         assert_eq!(r1.alice_bits, r2.alice_bits);
+        assert_eq!(r1.alice_bases, r2.alice_bases);
+        assert_eq!(r1.bob_bases, r2.bob_bases);
         assert_eq!(r1.bob_results, r2.bob_results);
         assert_eq!(r1.alice_key, r2.alice_key);
         assert_eq!(r1.bob_key, r2.bob_key);
+    }
+
+    #[test]
+    fn test_bbm92_par_eve() {
+        let channel = QuantumChannel::bit_flip(0.0);
+        let result = run_par(2000, &channel, &channel, 1.0, 0.5).unwrap();
+
+        assert!(result.eve_intercept_count > 0);
+        assert!((result.qber - 0.25).abs() < 0.05);
     }
 }
