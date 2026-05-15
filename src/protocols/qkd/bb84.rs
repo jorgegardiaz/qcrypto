@@ -184,12 +184,38 @@ pub fn run(
     })
 }
 
-/// Parallel variant of [`run`] using rayon.
+/// Parallelized variant of [`run`] using rayon. See [`run`] for protocol semantics.
 ///
-/// Each qubit transmission is processed independently on a rayon worker. A per-iteration
-/// `LocalRng` is derived deterministically from a master seed drawn from the thread-local
-/// RNG, so `set_global_seed(s)` followed by `run_par(...)` is byte-exact reproducible
-/// across runs.
+/// # Arguments
+///
+/// * `num_qubits` - Number of qubits to transmit.
+/// * `channel` - The quantum channel (noise model).
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+/// * `check_ratio` - Fraction of sifted bits to sacrifice for QBER estimation.
+///
+/// # Returns
+///
+/// A `Result` containing `BB84Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail (e.g. invalid dimensions).
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::bb84;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.1);
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r1 = bb84::run_par(300, &channel, 0.1, 0.2).unwrap();
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r2 = bb84::run_par(300, &channel, 0.1, 0.2).unwrap();
+///
+/// assert_eq!(r1.alice_key, r2.alice_key);
+/// ```
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,

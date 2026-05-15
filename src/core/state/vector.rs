@@ -1,3 +1,13 @@
+//! State vector implementation of a quantum state.
+//!
+//! This module provides the `StateVector` struct, which represents a pure quantum
+//! state as a complex vector of probability amplitudes.
+//!
+//! State vectors are highly efficient for simulating unitary evolution in noiseless
+//! systems, but they cannot represent mixed states. For simulations involving
+//! quantum channels and noise, the library may automatically convert these
+//! into `StateDensityMatrix` representations.
+
 use crate::core::errors::{GateError, MeasurementError, StateError};
 use crate::core::state::density::StateDensityMatrix;
 use crate::core::state::{

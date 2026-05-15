@@ -7,7 +7,7 @@
 //! - Measuring quantum states.
 //! - Simulating quantum channels and noise.
 //! - Implementing quantum cryptography protocols.
-//! - Reproducible simulations using deterministic thread-local RNGs.
+//! - Reproducible simulations using deterministic RNGs using seed.
 
 mod core;
 pub mod protocols;
@@ -19,8 +19,11 @@ pub use crate::core::{
 };
 
 pub use crate::core::state;
+
+pub use crate::sampler::Sampler;
+
+#[doc(hidden)]
 pub use crate::rng::{
     LocalRng, random_bool, random_f64, random_f64_range, random_usize_range, set_global_seed,
     shuffle_slice,
 };
-pub use crate::sampler::Sampler;

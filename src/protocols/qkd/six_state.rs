@@ -194,7 +194,38 @@ pub fn run(
     })
 }
 
-/// Parallel variant of [`run`] using rayon. See [`run`] for protocol semantics.
+/// Parallelized variant of [`run`] using rayon. See [`run`] for protocol semantics.
+///
+/// # Arguments
+///
+/// * `num_qubits` - Number of qubits to transmit.
+/// * `channel` - The quantum channel (noise model).
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+/// * `check_ratio` - Fraction of sifted bits to sacrifice for QBER estimation.
+///
+/// # Returns
+///
+/// A `Result` containing `SixStateResult` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::six_state;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.1);
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r1 = six_state::run_par(300, &channel, 0.1, 0.2).unwrap();
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r2 = six_state::run_par(300, &channel, 0.1, 0.2).unwrap();
+///
+/// assert_eq!(r1.alice_key, r2.alice_key);
+/// ```
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,

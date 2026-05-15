@@ -1,12 +1,5 @@
 //! SARG04 Quantum Key Distribution Protocol.
 //!
-//! SARG04 was proposed by Scarani, Acín, Ribordy and Gisin in 2004.
-//! It reuses the four BB84 states {|0>, |1>, |+>, |->} but differs in the sifting phase:
-//! instead of announcing her basis, Alice announces a pair of non-orthogonal states
-//! (one from each basis) that contains the state she actually sent. Bob deduces the
-//! bit only when his measurement outcome is orthogonal to exactly one of the two
-//! announced states — the bit value is then determined by the *other* state in the pair.
-//!
 //! Noiseless sifting rate is 1/4, and SARG04 is known to be more robust than BB84
 //! against photon-number-splitting attacks in weak-coherent-pulse implementations.
 
@@ -43,7 +36,29 @@ pub struct SARG04Result {
     pub bob_results: Vec<bool>,
 }
 
-/// Runs the SARG04 protocol simulation.
+/// Executes the SARG04 QKD protocol.
+///
+/// SARG04 was proposed by Scarani, Acín, Ribordy and Gisin in 2004.
+/// It reuses the four BB84 states {|0>, |1>, |+>, |->} but differs in the sifting phase:
+/// instead of announcing her basis, Alice announces a pair of non-orthogonal states
+/// (one from each basis) that contains the state she actually sent. Bob deduces the
+/// bit only when his measurement outcome is orthogonal to exactly one of the two
+/// announced states — the bit value is then determined by the *other* state in the pair.
+///
+/// # Arguments
+///
+/// * `num_qubits` - Number of entangled pairs to distribute.
+/// * `channel` - The quantum channel affecting Alice's qubit.
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+/// * `check_ratio` - Fraction of sifted bits to sacrifice for QBER estimation.
+///
+/// # Returns
+///
+/// A `Result` containing `SARG04Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
 pub fn run(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -118,7 +133,38 @@ pub fn run(
     )
 }
 
-/// Parallel version of [`run`].
+/// Parallelized variant of [`run`] using rayon. See [`run`] for protocol semantics.
+///
+/// # Arguments
+///
+/// * `num_qubits` - Number of entangled pairs to distribute.
+/// * `channel` - The quantum channel affecting Alice's qubit.
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+/// * `check_ratio` - Fraction of sifted bits to sacrifice for QBER estimation.
+///
+/// # Returns
+///
+/// A `Result` containing `SARG04Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::sarg04;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.1);
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r1 = sarg04::run_par(300, &channel, 0.1, 0.2).unwrap();
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r2 = sarg04::run_par(300, &channel, 0.1, 0.2).unwrap();
+///
+/// assert_eq!(r1.alice_key, r2.alice_key);
+/// ```
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,

@@ -186,10 +186,40 @@ pub fn run(
     })
 }
 
-/// Parallel variant of [`run`] using rayon.
+/// Parallelized variant of [`run`] using rayon. See [`run`] for protocol semantics.
 ///
-/// See [`run`] for protocol semantics. Determinism is preserved when the thread-local
-/// RNG is seeded via [`crate::rng::set_global_seed`] before invocation.
+/// # Arguments
+///
+/// * `num_qubits` - Number of qubits to transmit.
+/// * `channel` - The quantum channel (noise model).
+/// * `measurement` - Bob's POVM measurement device.
+/// * `eve_ratio` - Probability of Eve intercepting a qubit.
+/// * `check_ratio` - Fraction of conclusive bits to sacrifice for QBER estimation (0.0 to 1.0).
+///
+/// # Returns
+///
+/// A `Result` containing `B92Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::b92;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel = QuantumChannel::bit_flip(0.1);
+/// let measurement = b92::build_optimal_povm_b92().unwrap();
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r1 = b92::run_par(300, &channel, &measurement, 0.1, 0.2).unwrap();
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r2 = b92::run_par(300, &channel, &measurement, 0.1, 0.2).unwrap();
+///
+/// assert_eq!(r1.alice_key, r2.alice_key);
+/// ```
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,

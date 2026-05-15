@@ -1,3 +1,13 @@
+//! Density matrix implementation of a quantum state.
+//!
+//! This module provides the `StateDensityMatrix` struct, which represents a quantum
+//! state using a density matrix $\rho$. This representation is more general than
+//! state vectors as it can represent both pure and mixed states.
+//!
+//! Using density matrices is necessary when simulating decoherence or noise
+//! through quantum channels, as these operations typically transform pure states
+//! into statistical mixtures.
+
 use crate::core::errors::{ChannelError, GateError, MeasurementError, StateError};
 use crate::core::state::{
     GateApplicable, Measurable, PurityComputable, QuantumStateImpl, Validatable,

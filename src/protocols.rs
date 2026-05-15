@@ -1,4 +1,4 @@
-//! Quantum Cryptography Protocols.
+//! Various Quantum Cryptography Protocols.
 //!
 //! This module contains implementations of various quantum cryptography protocols,
 //! including QKD (Quantum Key Distribution) and QIA (Quantum Authentication Protocols).

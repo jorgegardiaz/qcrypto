@@ -256,7 +256,40 @@ pub fn run(
     })
 }
 
-/// Parallel variant of [`run`] using rayon. See [`run`] for protocol semantics.
+/// Parallelized variant of [`run`] using rayon. See [`run`] for protocol semantics.
+///
+/// # Arguments
+///
+/// * `num_pairs` - Number of entangled pairs to distribute.
+/// * `channel_alice` - The quantum channel affecting Alice's qubit.
+/// * `channel_bob` - The quantum channel affecting Bob's qubit.
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+/// * `check_ratio` - Fraction of sifted bits to sacrifice for QBER estimation.
+///
+/// # Returns
+///
+/// A `Result` containing `E91Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::e91;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel_alice = QuantumChannel::bit_flip(0.1);
+/// let channel_bob = QuantumChannel::bit_flip(0.05);
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r1 = e91::run_par(300, &channel_alice, &channel_bob, 0.1, 0.2).unwrap();
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r2 = e91::run_par(300, &channel_alice, &channel_bob, 0.1, 0.2).unwrap();
+///
+/// assert_eq!(r1.alice_key, r2.alice_key);
+/// ```
 pub fn run_par(
     num_pairs: usize,
     channel_alice: &QuantumChannel,
@@ -506,8 +539,8 @@ mod tests {
     #[test]
     fn test_e91_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
-        let result = run_par(2000, &channel, &channel, 0.0, 0.5).unwrap();
-        assert_eq!(result.raw_length, 2000);
+        let result = run_par(5000, &channel, &channel, 0.0, 0.5).unwrap();
+        assert_eq!(result.raw_length, 5000);
         assert_eq!(result.check_errors, 0);
         assert_eq!(result.qber, Some(0.0));
         assert_eq!(result.alice_key, result.bob_key);
@@ -537,7 +570,7 @@ mod tests {
     #[test]
     fn test_e91_par_noisy() {
         let channel = QuantumChannel::bit_flip(0.2); // High noise
-        let result = run_par(500, &channel, &channel, 0.0, 0.5).unwrap();
+        let result = run_par(500, &channel, &channel, 0.0, 1.0).unwrap();
         assert!(result.check_errors > 0);
         assert!(result.qber.unwrap() > 0.0);
     }

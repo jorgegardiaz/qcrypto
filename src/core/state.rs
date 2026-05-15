@@ -1,3 +1,20 @@
+//! Quantum state management through traits and polymorphism.
+//!
+//! This module provides a unified interface for handling quantum states, whether
+//! represented as state vectors (pure states) or density matrices (pure or mixed states).
+//!
+//! The core of the module is the `QuantumState` struct, which acts as a polymorphic
+//! container. It allows the library to switch between representations when necessary—for
+//! example, converting a state vector to a density matrix to simulate noise through
+//! a quantum channel.
+//!
+//! # Primary Interfaces
+//!
+//! - [`GateApplicable`]: For applying unitary gates and controlled operations.
+//! - [`Measurable`]: For performing measurements and obtaining outcome probabilities.
+//! - [`Validatable`]: For ensuring the state remains physically valid (normalized).
+//! - [`PurityComputable`]: For calculating the state's purity.
+
 pub mod density;
 pub mod vector;
 
@@ -8,12 +25,18 @@ use crate::core::errors::StateError;
 use crate::rng::LocalRng;
 use crate::{Gate, Measurement, MeasurementResult, QuantumChannel};
 
+/// Trait for validating the physical properties of a quantum state.
 pub trait Validatable {
+    /// Checks if the state is physically valid (e.g., normalization for vectors,
+    /// trace-one and positive-semi-definiteness for density matrices).
     fn is_valid(&self) -> Result<(), StateError>;
 }
 
+/// Trait for applying quantum operations (gates) to a state.
 pub trait GateApplicable {
+    /// Applies a unitary gate to the specified target qubits.
     fn apply(&mut self, gate: &Gate, target_qubits: &[usize]) -> Result<(), StateError>;
+    /// Applies a controlled unitary gate to the target qubits, conditioned on control qubits.
     fn apply_controlled(
         &mut self,
         gate: &Gate,
@@ -22,12 +45,15 @@ pub trait GateApplicable {
     ) -> Result<(), StateError>;
 }
 
+/// Trait for performing measurements on a quantum state.
 pub trait Measurable {
+    /// Computes the probabilities of all possible outcomes for a given measurement.
     fn set_measurement(
         &self,
         measurement: &Measurement,
         target_qubits: &[usize],
     ) -> Result<Vec<f64>, StateError>;
+    /// Performs a measurement and collapses the state according to the outcome.
     fn measure(
         &mut self,
         measurement: &Measurement,
@@ -44,11 +70,15 @@ pub trait Measurable {
     ) -> Result<MeasurementResult, StateError>;
 }
 
+/// Trait for calculating the purity of a quantum state.
 pub trait PurityComputable {
+    /// Returns the purity of the state (Tr(ρ²)).
     fn purity(&self) -> f64;
 }
 
+/// Helper trait to allow cloning of boxed `QuantumStateImpl` objects.
 pub trait StateClone {
+    /// Returns a boxed clone of the underlying implementation.
     fn clone_box(&self) -> Box<dyn QuantumStateImpl>;
 }
 
@@ -61,6 +91,7 @@ where
     }
 }
 
+/// Trait that combines all required functionality for a quantum state implementation.
 pub trait QuantumStateImpl:
     Validatable
     + GateApplicable
@@ -71,8 +102,12 @@ pub trait QuantumStateImpl:
     + Send
     + Sync
 {
+    /// Downcasts the implementation to a specific type using `Any`.
     fn as_any(&self) -> &dyn std::any::Any;
+    /// Attempts to convert the state to a density matrix representation.
     fn as_density_matrix(&self) -> Result<StateDensityMatrix, StateError>;
+    /// Attempts to apply a quantum channel. If the implementation is a vector,
+    /// it may trigger a conversion to a density matrix (handled by the caller).
     fn try_apply_channel(
         &mut self,
         channel: &QuantumChannel,
@@ -83,6 +118,7 @@ pub trait QuantumStateImpl:
 /// Represents a general quantum state that can be pure (vector) or mixed (density matrix).
 #[derive(Debug)]
 pub struct QuantumState {
+    /// The underlying state implementation (boxed trait object).
     pub state: Box<dyn QuantumStateImpl>,
 }
 

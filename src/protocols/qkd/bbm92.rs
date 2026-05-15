@@ -189,7 +189,39 @@ pub fn run(
     })
 }
 
-/// Parallel variant of [`run`] using rayon. See [`run`] for protocol semantics.
+/// Parallelized variant of [`run`] using rayon. See [`run`] for protocol semantics.
+///
+/// # Arguments
+///
+/// * `num_pairs` - Number of entangled pairs to distribute.
+/// * `channel` - The quantum channel (noise model) affecting the transmission.
+/// * `eve_ratio` - Probability of Eve intercepting (and measuring) a qubit.
+/// * `check_ratio` - Fraction of sifted bits to sacrifice for QBER estimation.
+///
+/// # Returns
+///
+/// A `Result` containing `Bbm92Result` with the simulation statistics and keys.
+///
+/// # Errors
+///
+/// Returns a `StateError` if quantum operations fail.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::protocols::bbm92;
+/// use qcrypto::QuantumChannel;
+///
+/// let channel_alice = QuantumChannel::bit_flip(0.1);
+/// let channel_bob = QuantumChannel::bit_flip(0.05);
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r1 = bbm92::run_par(300, &channel_alice, &channel_bob, 0.1, 0.2).unwrap();
+///
+/// qcrypto::rng::set_global_seed(42);
+/// let r2 = bbm92::run_par(300, &channel_alice, &channel_bob, 0.1, 0.2).unwrap();
+///
+/// assert_eq!(r1.alice_key, r2.alice_key);
+/// ```
 pub fn run_par(
     num_pairs: usize,
     channel_alice: &QuantumChannel,
