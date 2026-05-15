@@ -165,6 +165,80 @@ pub fn shuffle_slice<T>(slice: &mut [T]) {
     });
 }
 
+/// Draws a fresh 64-bit master seed from the current thread's RNG.
+///
+/// Used internally by parallel protocol variants to derive per-iteration child RNGs
+/// while preserving determinism: after `set_global_seed(s)`, this returns a
+/// reproducible value, which is then mixed with each iteration index to seed
+/// independent `LocalRng` instances.
+pub(crate) fn draw_master_seed() -> u64 {
+    QCRYPTO_RNG.with(|rng| rng.borrow_mut().random())
+}
+
+/// An explicit, owned random number generator for use inside parallel sections.
+///
+/// Unlike the module-level functions which borrow a thread-local RNG, `LocalRng`
+/// is a stack value that can be passed across rayon iterations. Construct one
+/// per parallel work unit via [`LocalRng::child`] so each iteration produces
+/// independent, deterministic random streams.
+///
+/// # Example
+/// ```rust
+/// use qcrypto::rng::LocalRng;
+///
+/// let mut rng = LocalRng::child(42, 7);
+/// let bit = rng.random_bool(0.5);
+/// let val = rng.random_f64();
+/// assert!((0.0..1.0).contains(&val));
+/// ```
+#[derive(Debug, Clone)]
+pub struct LocalRng(ChaCha8Rng);
+
+impl LocalRng {
+    /// Builds a deterministic child RNG from a master seed and a stream id.
+    ///
+    /// Two child RNGs with the same `(master_seed, stream_id)` produce identical
+    /// sequences; differing stream ids produce statistically independent ones.
+    /// The mixing constant is the golden-ratio multiplier `0x9E3779B97F4A7C15`,
+    /// which avoids collisions for small seeds.
+    pub fn child(master_seed: u64, stream_id: u64) -> Self {
+        let mixed = master_seed
+            .wrapping_mul(0x9E3779B97F4A7C15)
+            .wrapping_add(stream_id);
+        Self(ChaCha8Rng::seed_from_u64(mixed))
+    }
+
+    /// Builds a `LocalRng` from a raw 64-bit seed.
+    pub fn from_seed(seed: u64) -> Self {
+        Self(ChaCha8Rng::seed_from_u64(seed))
+    }
+
+    /// Generates a random boolean with probability `p` of being `true`.
+    pub fn random_bool(&mut self, p: f64) -> bool {
+        self.0.random_bool(p)
+    }
+
+    /// Generates a uniform `f64` in `[0.0, 1.0)`.
+    pub fn random_f64(&mut self) -> f64 {
+        self.0.random()
+    }
+
+    /// Generates a uniform `f64` in `[min, max)`.
+    pub fn random_f64_range(&mut self, min: f64, max: f64) -> f64 {
+        self.0.random_range(min..max)
+    }
+
+    /// Generates a uniform `usize` in `[min, max)`.
+    pub fn random_usize_range(&mut self, min: usize, max: usize) -> usize {
+        self.0.random_range(min..max)
+    }
+
+    /// Shuffles a mutable slice in-place.
+    pub fn shuffle_slice<T>(&mut self, slice: &mut [T]) {
+        rand::seq::SliceRandom::shuffle(slice, &mut self.0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,6 +325,57 @@ mod tests {
         assert_eq!(data1, data2);
         // And it should actually shuffle (highly unlikely to be 1,2,3,4,5 for seed 42)
         assert_ne!(data1, vec![1, 2, 3, 4, 5]);
+    }
+
+    #[test]
+    fn test_local_rng_child_reproducible() {
+        let mut a = LocalRng::child(42, 7);
+        let mut b = LocalRng::child(42, 7);
+        for _ in 0..16 {
+            assert_eq!(a.random_f64(), b.random_f64());
+        }
+    }
+
+    #[test]
+    fn test_local_rng_child_independent_streams() {
+        let mut a = LocalRng::child(42, 0);
+        let mut b = LocalRng::child(42, 1);
+        // Probability of collision on 16 floats is astronomically small.
+        let seq_a: Vec<f64> = (0..16).map(|_| a.random_f64()).collect();
+        let seq_b: Vec<f64> = (0..16).map(|_| b.random_f64()).collect();
+        assert_ne!(seq_a, seq_b);
+    }
+
+    #[test]
+    fn test_local_rng_from_seed_reproducible() {
+        let mut a = LocalRng::from_seed(123);
+        let mut b = LocalRng::from_seed(123);
+        assert_eq!(a.random_bool(0.5), b.random_bool(0.5));
+        assert_eq!(a.random_f64(), b.random_f64());
+        assert_eq!(a.random_f64_range(0.0, 10.0), b.random_f64_range(0.0, 10.0));
+        assert_eq!(a.random_usize_range(0, 100), b.random_usize_range(0, 100));
+
+        let mut data1: Vec<u32> = (0..16).collect();
+        let mut data2 = data1.clone();
+        a.shuffle_slice(&mut data1);
+        b.shuffle_slice(&mut data2);
+        assert_eq!(data1, data2);
+    }
+
+    #[test]
+    fn test_draw_master_seed_deterministic() {
+        set_global_seed(42);
+        let s1 = draw_master_seed();
+        set_global_seed(42);
+        let s2 = draw_master_seed();
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn test_local_rng_extreme_probabilities() {
+        let mut rng = LocalRng::from_seed(7);
+        assert!(rng.random_bool(1.0));
+        assert!(!rng.random_bool(0.0));
     }
 
     #[test]

@@ -5,6 +5,7 @@ pub use density::StateDensityMatrix;
 pub use vector::StateVector;
 
 use crate::core::errors::StateError;
+use crate::rng::LocalRng;
 use crate::{Gate, Measurement, MeasurementResult, QuantumChannel};
 
 pub trait Validatable {
@@ -31,6 +32,15 @@ pub trait Measurable {
         &mut self,
         measurement: &Measurement,
         target_qubits: &[usize],
+    ) -> Result<MeasurementResult, StateError>;
+    /// Same as [`measure`](Self::measure) but consumes randomness from an explicit
+    /// `LocalRng` instead of the thread-local RNG. Required for deterministic
+    /// parallel execution.
+    fn measure_with_rng(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        rng: &mut LocalRng,
     ) -> Result<MeasurementResult, StateError>;
 }
 
@@ -250,6 +260,29 @@ impl QuantumState {
         target_qubits: &[usize],
     ) -> Result<MeasurementResult, StateError> {
         self.state.measure(measurement, target_qubits)
+    }
+
+    /// Variant of [`measure`](Self::measure) that consumes randomness from an
+    /// explicit `LocalRng`. Use this inside parallel iterations where each
+    /// worker holds its own deterministic RNG.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::{QuantumState, Measurement};
+    /// use qcrypto::rng::LocalRng;
+    ///
+    /// let mut state = QuantumState::new(1);
+    /// let mut rng = LocalRng::child(42, 0);
+    /// let result = state.measure_with_rng(&Measurement::z_basis(), &[0], &mut rng).unwrap();
+    /// assert_eq!(result.value, 0.0);
+    /// ```
+    pub fn measure_with_rng(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        rng: &mut LocalRng,
+    ) -> Result<MeasurementResult, StateError> {
+        self.state.measure_with_rng(measurement, target_qubits, rng)
     }
 
     /// Applies a quantum channel (noise model) to the specified qubits.

@@ -3,6 +3,7 @@ use crate::core::state::density::StateDensityMatrix;
 use crate::core::state::{
     GateApplicable, Measurable, PurityComputable, QuantumStateImpl, Validatable,
 };
+use crate::rng::LocalRng;
 use crate::{Gate, Measurement, MeasurementResult, QuantumChannel, core::utils};
 use ndarray::Array1;
 use num_complex::Complex64;
@@ -304,10 +305,8 @@ impl StateVector {
         Ok(probs)
     }
 
-    /// Randomly selects an operator index weighted by the calculated probability distribution `probs`.
-    fn pick_outcome(&self, probs: &[f64]) -> usize {
-        let roll: f64 = crate::rng::random_f64();
-
+    /// Selects an operator index from a probability distribution `probs` using a precomputed roll.
+    fn select_outcome(probs: &[f64], roll: f64) -> usize {
         let mut cumulative = 0.0;
         for (i, &p) in probs.iter().enumerate() {
             cumulative += p;
@@ -316,6 +315,16 @@ impl StateVector {
             }
         }
         probs.len().saturating_sub(1)
+    }
+
+    /// Randomly selects an operator index weighted by the calculated probability distribution `probs`.
+    fn pick_outcome(&self, probs: &[f64]) -> usize {
+        Self::select_outcome(probs, crate::rng::random_f64())
+    }
+
+    /// Variant of [`pick_outcome`] that draws from an explicit `LocalRng`.
+    fn pick_outcome_with_rng(&self, probs: &[f64], rng: &mut LocalRng) -> usize {
+        Self::select_outcome(probs, rng.random_f64())
     }
 
     /// Performs a physical measurement, collapsing the quantum state.
@@ -351,10 +360,30 @@ impl StateVector {
         target_qubits: &[usize],
     ) -> Result<MeasurementResult, StateError> {
         let probs = self.set_measurement(measurement, target_qubits)?;
-
         let outcome_idx = self.pick_outcome(&probs);
-        let p_selected = probs[outcome_idx];
+        self.collapse_to(measurement, target_qubits, outcome_idx, probs[outcome_idx])
+    }
 
+    /// Variant of [`measure`](Self::measure) that consumes randomness from an
+    /// explicit `LocalRng` instead of the thread-local RNG.
+    pub fn measure_with_rng(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        rng: &mut LocalRng,
+    ) -> Result<MeasurementResult, StateError> {
+        let probs = self.set_measurement(measurement, target_qubits)?;
+        let outcome_idx = self.pick_outcome_with_rng(&probs, rng);
+        self.collapse_to(measurement, target_qubits, outcome_idx, probs[outcome_idx])
+    }
+
+    fn collapse_to(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        outcome_idx: usize,
+        p_selected: f64,
+    ) -> Result<MeasurementResult, StateError> {
         if p_selected > 1e-12 {
             let m_k = &measurement.operators[outcome_idx];
 
@@ -479,6 +508,15 @@ impl Measurable for StateVector {
         target_qubits: &[usize],
     ) -> Result<MeasurementResult, StateError> {
         self.measure(measurement, target_qubits)
+    }
+
+    fn measure_with_rng(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        rng: &mut LocalRng,
+    ) -> Result<MeasurementResult, StateError> {
+        self.measure_with_rng(measurement, target_qubits, rng)
     }
 }
 
@@ -778,6 +816,18 @@ mod tests {
             result,
             Err(StateError::GateError(GateError::ControlTargetOverlap(0)))
         ));
+    }
+
+    #[test]
+    fn test_vector_measure_with_rng() {
+        // Use QuantumState to wrap StateVector and ensure the trait implementation is hit
+        let mut state = crate::QuantumState::new(1);
+        state.apply(&crate::Gate::h(), &[0]).unwrap();
+        let mut rng = crate::rng::LocalRng::from_seed(42);
+        let result = state
+            .measure_with_rng(&crate::Measurement::z_basis(), &[0], &mut rng)
+            .unwrap();
+        assert!(result.value == 0.0 || result.value == 1.0);
     }
 
     #[test]

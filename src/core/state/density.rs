@@ -2,6 +2,7 @@ use crate::core::errors::{ChannelError, GateError, MeasurementError, StateError}
 use crate::core::state::{
     GateApplicable, Measurable, PurityComputable, QuantumStateImpl, Validatable,
 };
+use crate::rng::LocalRng;
 use crate::{Gate, Measurement, MeasurementResult, QuantumChannel, core::utils};
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
@@ -460,10 +461,8 @@ impl StateDensityMatrix {
         Ok(probs)
     }
 
-    /// Randomly selects an operator index weighted according to a given generic probability sequence `probs`.
-    fn pick_outcome(&self, probs: &[f64]) -> usize {
-        let roll: f64 = crate::rng::random_f64();
-
+    /// Selects an operator index from a probability distribution `probs` using a precomputed roll.
+    fn select_outcome(probs: &[f64], roll: f64) -> usize {
         let mut cumulative = 0.0;
         for (i, &p) in probs.iter().enumerate() {
             cumulative += p;
@@ -472,6 +471,16 @@ impl StateDensityMatrix {
             }
         }
         probs.len().saturating_sub(1)
+    }
+
+    /// Randomly selects an operator index weighted according to a given generic probability sequence `probs`.
+    fn pick_outcome(&self, probs: &[f64]) -> usize {
+        Self::select_outcome(probs, crate::rng::random_f64())
+    }
+
+    /// Variant of [`pick_outcome`] that draws from an explicit `LocalRng`.
+    fn pick_outcome_with_rng(&self, probs: &[f64], rng: &mut LocalRng) -> usize {
+        Self::select_outcome(probs, rng.random_f64())
     }
 
     /// Measures the state and collapses the density matrix according to the chosen outcome.
@@ -511,10 +520,30 @@ impl StateDensityMatrix {
         target_qubits: &[usize],
     ) -> Result<MeasurementResult, StateError> {
         let probs = self.set_measurement(measurement, target_qubits)?;
-
         let outcome_idx = self.pick_outcome(&probs);
-        let p_selected = probs[outcome_idx];
+        self.collapse_to(measurement, target_qubits, outcome_idx, probs[outcome_idx])
+    }
 
+    /// Variant of [`measure`](Self::measure) that consumes randomness from an
+    /// explicit `LocalRng` instead of the thread-local RNG.
+    pub fn measure_with_rng(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        rng: &mut LocalRng,
+    ) -> Result<MeasurementResult, StateError> {
+        let probs = self.set_measurement(measurement, target_qubits)?;
+        let outcome_idx = self.pick_outcome_with_rng(&probs, rng);
+        self.collapse_to(measurement, target_qubits, outcome_idx, probs[outcome_idx])
+    }
+
+    fn collapse_to(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        outcome_idx: usize,
+        p_selected: f64,
+    ) -> Result<MeasurementResult, StateError> {
         if p_selected > 1e-12 {
             let m_k = &measurement.operators[outcome_idx];
             let m_k_dagger = m_k.t().mapv(|c| c.conj());
@@ -726,6 +755,15 @@ impl Measurable for StateDensityMatrix {
         target_qubits: &[usize],
     ) -> Result<MeasurementResult, StateError> {
         self.measure(measurement, target_qubits)
+    }
+
+    fn measure_with_rng(
+        &mut self,
+        measurement: &Measurement,
+        target_qubits: &[usize],
+        rng: &mut LocalRng,
+    ) -> Result<MeasurementResult, StateError> {
+        self.measure_with_rng(measurement, target_qubits, rng)
     }
 }
 
