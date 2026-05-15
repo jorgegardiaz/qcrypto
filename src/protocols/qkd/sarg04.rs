@@ -228,18 +228,16 @@ fn process_results(
         if alice_bases[i] != bob_bases[i] {
             // Sifting logic: Success if result is 1 (orthogonal to the expected 0 in other basis).
             // This is a simplified model of SARG04.
-            if bob_results[i] {
-                if rng.random_bool(0.25) {
-                    sifted_alice.push(alice_bits[i]);
-                    // Bob gets the bit correctly if his result was conclusive,
-                    // but we simulate channel noise flipping the inferred bit.
-                    let has_error = rng.random_bool(estimated_noise);
-                    sifted_bob.push(if has_error {
-                        !alice_bits[i]
-                    } else {
-                        alice_bits[i]
-                    });
-                }
+            if bob_results[i] && rng.random_bool(0.25) {
+                sifted_alice.push(alice_bits[i]);
+                // Bob gets the bit correctly if his result was conclusive,
+                // but we simulate channel noise flipping the inferred bit.
+                let has_error = rng.random_bool(estimated_noise);
+                sifted_bob.push(if has_error {
+                    !alice_bits[i]
+                } else {
+                    alice_bits[i]
+                });
             }
         }
     }
