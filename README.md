@@ -61,6 +61,8 @@ cargo add qcrypto
 
 The library includes reference implementations for standard and novel quantum cryptographic schemes. All protocols include `run` and  `run_par`, the second one using `rayon` to parallelize sampling instances. For low nomber of qubits (num_qubits < 500) `run` is faster due to the overhead of thread managing on `run_par`.
 
+`qcypto` offers some implementations of these types of cryptographic protocols: **QKD**, **QIA** and **QDS**.
+
 ### 1. BB84 (Bennett & Brassard, 1984)
 
 The standard protocol for Quantum Key Distribution. The implementation supports:
@@ -119,6 +121,17 @@ This protocol establishes a Quantum Zero-Knowledge Proof (QZKP) for identity aut
 * *Completeness:* Honest provers are accepted with probability approaching 1 (adjusted for channel noise models).
 * *Soundness:* The probability of a dishonest prover successfully impersonating an identity follows a binomial distribution , decaying exponentially with key length .
 * *Zero-Knowledge:* The designated verifier gains no information about the long-term secret  due to the ephemeral masking .
+
+### 8. GC01 (Gottesman & Chuang, 2001)
+This protocol establishes a Quantum Digital Signature (QDS) scheme that allows a sender to sign classical messages such that any recipient can verify authenticity and transferability is guaranteed.
+
+* **Security Model**: Relies on the quantum impossibility of distinguishing non-orthogonal quantum states (analogous to one-way functions in the classical setting). Security is information-theoretic, not computational.
+* **Properties**:
+* Unforgeability: The probability of a dishonest party forging a valid signature is exponentially suppressed in the number of qubits $n$ used per signature element, following from the indistinguishability of the quantum public keys.
+* Transferability: A signature accepted by one honest recipient is guaranteed to be accepted by any other honest recipient, preventing repudiation across parties.
+* Non-repudiation: The signer cannot later deny having signed a message, as the distributed quantum public keys bind the signature to a unique originator.
+
+
 
 ---
 
