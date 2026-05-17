@@ -209,31 +209,128 @@ impl LocalRng {
     }
 
     /// Builds a `LocalRng` from a raw 64-bit seed.
+    ///
+    /// Unlike [`LocalRng::child`], this does not mix the seed with a stream ID.
+    /// Use this when you already hold a unique derived seed and do not need to
+    /// fan out into multiple independent streams.
+    ///
+    /// # Arguments
+    ///
+    /// * `seed` - The 64-bit seed used to initialize the pseudo-random generator.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::rng::LocalRng;
+    ///
+    /// let mut rng = LocalRng::from_seed(42);
+    /// let val = rng.random_f64();
+    /// assert!((0.0..1.0).contains(&val));
+    /// ```
     pub fn from_seed(seed: u64) -> Self {
         Self(ChaCha8Rng::seed_from_u64(seed))
     }
 
     /// Generates a random boolean with probability `p` of being `true`.
+    ///
+    /// # Arguments
+    ///
+    /// * `p` - The probability (`0.0` to `1.0`) that the function returns `true`.
+    ///
+    /// # Returns
+    ///
+    /// A boolean value: `true` with probability `p`, and `false` with probability `1.0 - p`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::rng::LocalRng;
+    ///
+    /// let mut rng = LocalRng::from_seed(42);
+    /// assert!(rng.random_bool(1.0));
+    /// assert!(!rng.random_bool(0.0));
+    /// ```
     pub fn random_bool(&mut self, p: f64) -> bool {
         self.0.random_bool(p)
     }
 
     /// Generates a uniform `f64` in `[0.0, 1.0)`.
+    ///
+    /// # Returns
+    ///
+    /// A uniformly distributed `f64` between `0.0` (inclusive) and `1.0` (exclusive).
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::rng::LocalRng;
+    ///
+    /// let mut rng = LocalRng::from_seed(42);
+    /// let val = rng.random_f64();
+    /// assert!((0.0..1.0).contains(&val));
+    /// ```
     pub fn random_f64(&mut self) -> f64 {
         self.0.random()
     }
 
     /// Generates a uniform `f64` in `[min, max)`.
+    ///
+    /// # Arguments
+    ///
+    /// * `min` - The minimum value (inclusive).
+    /// * `max` - The maximum value (exclusive).
+    ///
+    /// # Returns
+    ///
+    /// A uniformly distributed `f64` between `min` and `max`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::rng::LocalRng;
+    ///
+    /// let mut rng = LocalRng::from_seed(42);
+    /// let val = rng.random_f64_range(1.0, 5.0);
+    /// assert!(val >= 1.0 && val < 5.0);
+    /// ```
     pub fn random_f64_range(&mut self, min: f64, max: f64) -> f64 {
         self.0.random_range(min..max)
     }
 
     /// Generates a uniform `usize` in `[min, max)`.
+    ///
+    /// # Arguments
+    ///
+    /// * `min` - The minimum value (inclusive).
+    /// * `max` - The maximum value (exclusive).
+    ///
+    /// # Returns
+    ///
+    /// A uniformly distributed `usize` between `min` and `max`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::rng::LocalRng;
+    ///
+    /// let mut rng = LocalRng::from_seed(42);
+    /// let val = rng.random_usize_range(0, 10);
+    /// assert!(val < 10);
+    /// ```
     pub fn random_usize_range(&mut self, min: usize, max: usize) -> usize {
         self.0.random_range(min..max)
     }
 
     /// Shuffles a mutable slice in-place.
+    ///
+    /// # Arguments
+    ///
+    /// * `slice` - A mutable reference to a slice of items to be shuffled in-place.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::rng::LocalRng;
+    ///
+    /// let mut rng = LocalRng::from_seed(42);
+    /// let mut data = vec![1, 2, 3, 4, 5];
+    /// rng.shuffle_slice(&mut data);
+    /// // data is now deterministically shuffled
+    /// ```
     pub fn shuffle_slice<T>(&mut self, slice: &mut [T]) {
         rand::seq::SliceRandom::shuffle(slice, &mut self.0);
     }
