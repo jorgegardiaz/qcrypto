@@ -18,7 +18,7 @@ fn test_bb84_noiseless_zero_qber() {
     assert_eq!(result.raw_length, 200);
     assert_eq!(result.check_errors, 0);
     assert_eq!(result.qber, 0.0);
-    assert_eq!(result.eve_detected_count, 0);
+    assert_eq!(result.eve_intercepted_count, 0);
     // Sifted key should be roughly half of raw (matching bases ~50%)
     assert!(result.total_sifted > 50);
     assert!(!result.alice_key.is_empty());
@@ -31,7 +31,7 @@ fn test_bb84_eve_introduces_errors() {
     // Eve intercepts every qubit
     let result = bb84::run(500, &channel, 1.0, 0.5).unwrap();
 
-    assert!(result.eve_detected_count > 0);
+    assert!(result.eve_intercepted_count > 0);
     // Eve measuring in random bases should introduce ~25% QBER
     assert!(result.qber > 0.05, "Eve should introduce measurable errors");
 }
@@ -43,7 +43,7 @@ fn test_bb84_noisy_channel_introduces_qber() {
     let channel = QuantumChannel::bit_flip(0.3);
     let result = bb84::run(500, &channel, 0.0, 0.5).unwrap();
 
-    assert_eq!(result.eve_detected_count, 0);
+    assert_eq!(result.eve_intercepted_count, 0);
     assert!(result.qber > 0.0, "Noise should introduce QBER");
 }
 
@@ -101,7 +101,7 @@ fn test_b92_noiseless_zero_qber() {
     assert_eq!(result.raw_length, 200);
     assert_eq!(result.check_errors, 0);
     assert_eq!(result.qber, 0.0);
-    assert_eq!(result.eve_detected_count, 0);
+    assert_eq!(result.eve_intercepted_count, 0);
     // B92 has lower yield than BB84 due to inconclusive results
     assert!(result.conclusive_count > 0);
     assert!(result.conclusive_count < result.raw_length);
@@ -120,7 +120,7 @@ fn test_b92_eve_introduces_errors() {
     let measurement = b92::build_optimal_povm_b92().unwrap();
     let result = b92::run(500, &channel, &measurement, 1.0, 0.5).unwrap();
 
-    assert!(result.eve_detected_count > 0);
+    assert!(result.eve_intercepted_count > 0);
     assert!(result.qber > 0.0);
 }
 

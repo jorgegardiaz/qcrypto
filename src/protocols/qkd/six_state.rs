@@ -19,7 +19,7 @@ pub struct SixStateResult {
     /// The Quantum Bit Error Rate (QBER) in percentage (on check bits).
     pub qber: f64,
     /// The number of times Eve was detected (simulated).
-    pub eve_detected_count: usize,
+    pub eve_intercepted_count: usize,
     /// Alice's final key (sifted key minus check bits).
     pub alice_key: Vec<bool>,
     /// Bob's final key (sifted key minus check bits).
@@ -184,7 +184,7 @@ pub fn run(
         total_sifted,
         check_errors,
         qber,
-        eve_detected_count: eve_intercepted_count,
+        eve_intercepted_count,
         alice_key,
         bob_key,
         alice_bits,
@@ -338,7 +338,7 @@ pub fn run_par(
         total_sifted,
         check_errors,
         qber,
-        eve_detected_count: eve_intercepted_count,
+        eve_intercepted_count,
         alice_key,
         bob_key,
         alice_bits,
@@ -360,7 +360,7 @@ mod tests {
         assert_eq!(result.raw_length, 300);
         assert_eq!(result.check_errors, 0);
         assert_eq!(result.qber, 0.0);
-        assert_eq!(result.eve_detected_count, 0);
+        assert_eq!(result.eve_intercepted_count, 0);
         // Sifted rate should be around 1/3
         assert!(result.total_sifted > 50 && result.total_sifted < 150);
     }
@@ -400,7 +400,7 @@ mod tests {
         // 5000 qubits -> ~833 check bits (1/3 sifted * 0.5) -> σ≈0.016, tolerance 0.06 covers ~4σ
         let result = run(5000, &channel, 1.0, 0.5).unwrap();
 
-        assert!(result.eve_detected_count > 0);
+        assert!(result.eve_intercepted_count > 0);
         assert!(
             (result.qber - 0.333).abs() < 0.06,
             "QBER {} should be around 0.333",
@@ -453,7 +453,7 @@ mod tests {
         let channel = QuantumChannel::bit_flip(0.0);
         let result = run_par(5000, &channel, 1.0, 0.5).unwrap();
 
-        assert!(result.eve_detected_count > 0);
+        assert!(result.eve_intercepted_count > 0);
         assert!((result.qber - 0.333).abs() < 0.06);
     }
 }

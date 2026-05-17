@@ -19,7 +19,7 @@ pub struct BB84Result {
     /// The Quantum Bit Error Rate (QBER) in percentage (on check bits).
     pub qber: f64,
     /// The number of times Eve was detected (simulated).
-    pub eve_detected_count: usize,
+    pub eve_intercepted_count: usize,
     /// Alice's final key (sifted key minus check bits).
     pub alice_key: Vec<bool>,
     /// Bob's final key (sifted key minus check bits).
@@ -174,7 +174,7 @@ pub fn run(
         total_sifted,
         check_errors,
         qber,
-        eve_detected_count: eve_intercepted_count,
+        eve_intercepted_count,
         alice_key,
         bob_key,
         alice_bits,
@@ -323,7 +323,7 @@ pub fn run_par(
         total_sifted,
         check_errors,
         qber,
-        eve_detected_count: eve_intercepted_count,
+        eve_intercepted_count,
         alice_key,
         bob_key,
         alice_bits,
@@ -345,7 +345,7 @@ mod tests {
         assert_eq!(result.raw_length, 100);
         assert_eq!(result.check_errors, 0);
         assert_eq!(result.qber, 0.0);
-        assert_eq!(result.eve_detected_count, 0);
+        assert_eq!(result.eve_intercepted_count, 0);
     }
 
     #[test]
@@ -383,7 +383,7 @@ mod tests {
         // 5000 qubits -> ~1250 check bits -> σ≈0.012, tolerance 0.06 covers ~5σ
         let result = run(5000, &channel, 1.0, 0.5).unwrap();
 
-        assert!(result.eve_detected_count > 0);
+        assert!(result.eve_intercepted_count > 0);
         assert!(
             (result.qber - 0.25).abs() < 0.06,
             "QBER {} should be around 0.25",
@@ -412,7 +412,7 @@ mod tests {
         assert_eq!(result.raw_length, 200);
         assert_eq!(result.check_errors, 0);
         assert_eq!(result.qber, 0.0);
-        assert_eq!(result.eve_detected_count, 0);
+        assert_eq!(result.eve_intercepted_count, 0);
     }
 
     #[test]
@@ -430,14 +430,14 @@ mod tests {
         assert_eq!(r1.bob_results, r2.bob_results);
         assert_eq!(r1.alice_key, r2.alice_key);
         assert_eq!(r1.bob_key, r2.bob_key);
-        assert_eq!(r1.eve_detected_count, r2.eve_detected_count);
+        assert_eq!(r1.eve_intercepted_count, r2.eve_intercepted_count);
     }
 
     #[test]
     fn test_bb84_par_eve() {
         let channel = QuantumChannel::bit_flip(0.0);
         let result = run_par(5000, &channel, 1.0, 0.5).unwrap();
-        assert!(result.eve_detected_count > 0);
+        assert!(result.eve_intercepted_count > 0);
         assert!(
             (result.qber - 0.25).abs() < 0.06,
             "QBER {} should be around 0.25",

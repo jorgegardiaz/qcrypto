@@ -23,7 +23,7 @@ pub struct B92Result {
     /// The Quantum Bit Error Rate (QBER) calculated on the check bits.
     pub qber: f64,
     /// The number of times Eve was detected (simulated).
-    pub eve_detected_count: usize,
+    pub eve_intercepted_count: usize,
     /// Alice's final key (conclusive results excluding check bits).
     pub alice_key: Vec<bool>,
     /// Bob's final key (conclusive results excluding check bits).
@@ -178,7 +178,7 @@ pub fn run(
         conclusive_count: total_conclusive,
         check_errors,
         qber,
-        eve_detected_count: eve_intercepted_count,
+        eve_intercepted_count,
         alice_key,
         bob_key,
         alice_bits,
@@ -321,7 +321,7 @@ pub fn run_par(
         conclusive_count: total_conclusive,
         check_errors,
         qber,
-        eve_detected_count: eve_intercepted_count,
+        eve_intercepted_count,
         alice_key,
         bob_key,
         alice_bits,
@@ -386,7 +386,7 @@ mod tests {
         assert_eq!(result.raw_length, 100);
         assert_eq!(result.check_errors, 0);
         assert_eq!(result.qber, 0.0);
-        assert_eq!(result.eve_detected_count, 0);
+        assert_eq!(result.eve_intercepted_count, 0);
     }
 
     #[test]
@@ -426,7 +426,7 @@ mod tests {
         // B92 is very sensitive to intercept-and-resend.
         let result = run(1000, &channel, &measurement, 1.0, 0.5).unwrap();
 
-        assert!(result.eve_detected_count > 0);
+        assert!(result.eve_intercepted_count > 0);
         // In B92, if Eve measures in the wrong basis (50%), she can resend a state
         // that Bob's POVM detects as the *wrong* conclusive result.
         assert!(
@@ -460,7 +460,7 @@ mod tests {
         assert_eq!(result.raw_length, 200);
         assert_eq!(result.check_errors, 0);
         assert_eq!(result.qber, 0.0);
-        assert_eq!(result.eve_detected_count, 0);
+        assert_eq!(result.eve_intercepted_count, 0);
     }
 
     #[test]
@@ -484,7 +484,7 @@ mod tests {
         let channel = QuantumChannel::bit_flip(0.0);
         let measurement = build_optimal_povm_b92().unwrap();
         let result = run_par(1000, &channel, &measurement, 1.0, 0.5).unwrap();
-        assert!(result.eve_detected_count > 0);
+        assert!(result.eve_intercepted_count > 0);
         assert!(result.qber > 0.15);
     }
 }

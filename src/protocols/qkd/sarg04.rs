@@ -21,7 +21,7 @@ pub struct SARG04Result {
     /// The Quantum Bit Error Rate (QBER) on check bits.
     pub qber: f64,
     /// The number of times Eve intercepted a qubit (simulated).
-    pub eve_detected_count: usize,
+    pub eve_intercepted_count: usize,
     /// Alice's final key (conclusive bits minus check bits).
     pub alice_key: Vec<bool>,
     /// Bob's final key (conclusive bits minus check bits).
@@ -294,19 +294,17 @@ fn finalize_sarg04(
         0.0
     };
 
-    let mut alice_key = Vec::with_capacity(key_indices.len());
-    let mut bob_key = Vec::with_capacity(key_indices.len());
-    for &i in key_indices {
-        alice_key.push(alice_bits[i]);
-        bob_key.push(alice_bits[i]);
-    }
+    let (alice_key, bob_key): (Vec<_>, Vec<_>) = key_indices
+        .iter()
+        .map(|&i| (alice_bits[i], alice_bits[i]))
+        .unzip();
 
     Ok(SARG04Result {
         raw_length: num_qubits,
         conclusive_count: total_conclusive,
         check_errors: (qber * num_check as f64) as usize,
         qber,
-        eve_detected_count: eve_intercepted_count,
+        eve_intercepted_count,
         alice_key,
         bob_key,
         alice_bits,
@@ -315,6 +313,7 @@ fn finalize_sarg04(
         bob_results,
     })
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -376,7 +375,7 @@ mod tests {
     fn test_sarg04_with_eve() {
         let channel = QuantumChannel::bit_flip(0.0);
         let result = run(2000, &channel, 1.0, 0.5).unwrap();
-        assert!(result.eve_detected_count > 0);
+        assert!(result.eve_intercepted_count > 0);
         // Eve in SARG04 introduces QBER on matching bases too.
         assert!(result.qber > 0.1);
     }
