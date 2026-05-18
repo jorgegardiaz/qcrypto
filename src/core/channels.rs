@@ -204,6 +204,21 @@ impl QuantumChannel {
         Ok(expanded_ops)
     }
 
+    /// Creates a Identity channel.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::QuantumChannel;
+    ///
+    /// let channel = QuantumChannel::identity();
+    /// assert_eq!(channel.num_qubits, 1);
+    /// ```
+    pub fn identity() -> QuantumChannel {
+        let k0 = Array2::<Complex64>::eye(2);
+
+        QuantumChannel::new(vec![k0]).expect("Error in identity channel")
+    }
+
     /// Creates a Bit Flip channel.
     ///
     /// With probability `p`, applies X; otherwise Identity.
@@ -571,6 +586,7 @@ mod tests {
     fn test_all_predefined_channels_are_cptp() {
         for i in 0..=10 {
             let p = i as f64 / 10.0;
+            assert_trace_preserving(&QuantumChannel::identity());
             assert_trace_preserving(&QuantumChannel::bit_flip(p));
             assert_trace_preserving(&QuantumChannel::phase_flip(p));
             assert_trace_preserving(&QuantumChannel::bit_phase_flip(p));
@@ -590,8 +606,8 @@ mod tests {
     fn test_bit_flip_p0_is_identity() {
         let channel = QuantumChannel::bit_flip(0.0);
         // K0 should be I, K1 should be zero
-        let eye = Array2::<Complex64>::eye(2);
-        for (a, b) in channel.kraus_ops[0].iter().zip(eye.iter()) {
+        let identity = QuantumChannel::identity();
+        for (a, b) in channel.kraus_ops[0].iter().zip(&identity.kraus_ops[0]) {
             assert!((*a - *b).norm() < 1e-12);
         }
         for &val in channel.kraus_ops[1].iter() {

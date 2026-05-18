@@ -30,6 +30,7 @@ fn assert_cptp(channel: &QuantumChannel, tol: f64) {
 #[test]
 fn test_compose_preserves_cptp() {
     let channels = [
+        QuantumChannel::identity(),
         QuantumChannel::bit_flip(0.1),
         QuantumChannel::phase_flip(0.2),
         QuantumChannel::depolarizing(0.15),
