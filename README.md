@@ -263,7 +263,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   <img src="./assets/qcryptool_logo.png" alt="qcryptool logo" width="130">
 
   [![Crates.io](https://img.shields.io/crates/v/qcryptool.svg)](https://crates.io/crates/qcryptool)
-  [![Docs](https://docs.rs/qcryptool/badge.svg)](https://docs.rs/qcryptool)
 </div>
 
 [`qcryptool`](https://github.com/jorgegardiaz/qcryptool) is a command-line simulator for quantum cryptography protocols built directly on top of `qcrypto`. It is designed for researchers, educators, and engineers who want to run and analyse quantum protocol simulations without writing any Rust code.
