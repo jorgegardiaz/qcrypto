@@ -1,6 +1,6 @@
 [package]
 name = "qcrypto"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["Jorge Garcia-Diaz <jgarcidi@ull.edu.es>", "Daniel Escanez-Exposito <jescanez@ull.edu.es>"]
 description = "Library for the design, simulation and validation of Quantum Cryptography protocols"
