@@ -257,6 +257,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+## CLI Tool: qcryptool
+
+<div align="center">
+  <img src="./assets/qcryptool_logo.png" alt="qcryptool logo" width="130">
+
+  [![Crates.io](https://img.shields.io/crates/v/qcryptool.svg)](https://crates.io/crates/qcryptool)
+  [![Docs](https://docs.rs/qcryptool/badge.svg)](https://docs.rs/qcryptool)
+</div>
+
+[`qcryptool`](https://github.com/jorgegardiaz/qcryptool) is a command-line simulator for quantum cryptography protocols built directly on top of `qcrypto`. It is designed for researchers, educators, and engineers who want to run and analyse quantum protocol simulations without writing any Rust code.
+
+**What you can do with it:**
+
+* Run any of the eight protocols implemented in `qcrypto` (BB84, B92, BBM92, E91, Six-State, SARG04, QIA-QZKP, GC01) from the terminal with a single command.
+* Execute **multi-shot** experiments and collect aggregate statistics (mean QBER, key length, Eve detection rate, …) automatically.
+* Configure **noise models** per channel (bit-flip, depolarizing, amplitude damping, …) via flags or a JSON channel-mix file that samples parameters stochastically across shots.
+* Export results to **CSV, JSON, or plain text** for downstream analysis in Python, R, or any data tool.
+* Guarantee **reproducibility** with a `--seed` flag: the same seed always produces identical keys, QBER values, and measurement outcomes.
+* Drive full experiments from a single **JSON config file** (`--experiment-config`) without any CLI flags.
+
+```bash
+cargo install qcryptool
+
+# Single shot — noiseless BB84
+qcryptool bb84 -n 1000
+
+# 100 shots with depolarizing noise, saved to CSV
+qcryptool bb84 -n 1024 -s 100 --channel1 depolarizing --p1 0.03 -o results.csv
+
+# Entanglement-based E91 with asymmetric channels
+qcryptool e91 -n 1000 --channel1 depolarizing --p1 0.01 --channel2 depolarizing --p2 0.04
+
+# Fully reproducible run
+qcryptool bb84 -n 1024 -s 50 --seed 42 -o run_a.csv
+```
+
+See the [qcryptool repository](https://github.com/jorgegardiaz/qcryptool) for the full documentation.
+
+---
+
 ## References
 
 If you use this software in your research or project, please cite it using the information in [CITATION](CITATION.cff). Additionally, if you use the QIA-QZKP protocol in your research, please cite the original paper:
