@@ -16,7 +16,7 @@ pub struct Bbm92Result {
     pub total_sifted: usize,
     /// The number of errors found in the check bits.
     pub check_errors: usize,
-    /// The Quantum Bit Error Rate (QBER) in percentage (on check bits).
+    /// The Quantum Bit Error Rate (QBER) on check bits.
     pub qber: f64,
     /// The number of times Eve intercepted a qubit (simulated).
     pub eve_intercept_count: usize,
