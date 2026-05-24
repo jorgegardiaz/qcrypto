@@ -248,3 +248,175 @@ fn test_sampler_default_has_no_channel() {
     let sampler = Sampler::new();
     assert!(sampler.channel.is_none());
 }
+
+// ─── run_par: deterministic states ───────────────────────────────────────────
+
+#[test]
+fn test_sampler_par_ground_state_always_zero() {
+    let state = QuantumState::new(1); // |0>
+    let sampler = Sampler::new();
+    let counts = sampler
+        .run_par(&state, &Measurement::z_basis(), &[0], 500)
+        .unwrap();
+
+    assert_eq!(counts.len(), 1);
+    assert_eq!(*counts.get("0").unwrap(), 500);
+}
+
+#[test]
+fn test_sampler_par_excited_state_always_one() {
+    let mut state = QuantumState::new(1);
+    state.apply(&Gate::x(), &[0]).unwrap(); // |1>
+
+    let sampler = Sampler::new();
+    let counts = sampler
+        .run_par(&state, &Measurement::z_basis(), &[0], 500)
+        .unwrap();
+
+    assert_eq!(counts.len(), 1);
+    assert_eq!(*counts.get("1").unwrap(), 500);
+}
+
+// ─── run_par: superposition statistics ───────────────────────────────────────
+
+#[test]
+fn test_sampler_par_hadamard_roughly_balanced() {
+    qcrypto::set_global_seed(5000);
+    let mut state = QuantumState::new(1);
+    state.apply(&Gate::h(), &[0]).unwrap(); // |+>
+
+    let sampler = Sampler::new();
+    let num_shots = 5000;
+    let counts = sampler
+        .run_par(&state, &Measurement::z_basis(), &[0], num_shots)
+        .unwrap();
+
+    let c0 = *counts.get("0").unwrap_or(&0);
+    let c1 = *counts.get("1").unwrap_or(&0);
+
+    assert_eq!(c0 + c1, num_shots);
+    assert!(c0 > 1750 && c0 < 3250, "Expected ~2500, got {}", c0);
+    assert!(c1 > 1750 && c1 < 3250, "Expected ~2500, got {}", c1);
+}
+
+// ─── run_par: multi-qubit ─────────────────────────────────────────────────────
+
+#[test]
+fn test_sampler_par_bell_state_z_basis() {
+    qcrypto::set_global_seed(6000);
+    let mut state = QuantumState::new(2);
+    state.apply(&Gate::h(), &[0]).unwrap();
+    state.apply(&Gate::cnot(), &[0, 1]).unwrap(); // Bell state |Φ+>
+
+    let sampler = Sampler::new();
+    let counts = sampler
+        .run_par(&state, &Measurement::z_basis(), &[0], 2000)
+        .unwrap();
+
+    let c0 = *counts.get("0").unwrap_or(&0);
+    let c1 = *counts.get("1").unwrap_or(&0);
+    assert_eq!(c0 + c1, 2000);
+    assert!(c0 > 700 && c0 < 1300);
+}
+
+#[test]
+fn test_sampler_par_bell_basis_on_bell_state() {
+    let mut state = QuantumState::new(2);
+    state.apply(&Gate::h(), &[0]).unwrap();
+    state.apply(&Gate::cnot(), &[0, 1]).unwrap(); // |Φ+>
+
+    let sampler = Sampler::new();
+    let counts = sampler
+        .run_par(&state, &Measurement::bell_basis(), &[0, 1], 500)
+        .unwrap();
+
+    assert_eq!(counts.len(), 1, "Bell state measured in Bell basis should give one outcome");
+    let total: usize = counts.values().sum();
+    assert_eq!(total, 500);
+}
+
+// ─── run_par: channel ─────────────────────────────────────────────────────────
+
+#[test]
+fn test_sampler_par_with_bit_flip_channel() {
+    let state = QuantumState::new(1); // |0>
+    let channel = QuantumChannel::bit_flip(1.0); // always flip
+    let sampler = Sampler::new().with_channel(channel);
+
+    let counts = sampler
+        .run_par(&state, &Measurement::z_basis(), &[0], 200)
+        .unwrap();
+
+    assert_eq!(*counts.get("1").unwrap(), 200);
+}
+
+#[test]
+fn test_sampler_par_identity_channel_no_effect() {
+    let state = QuantumState::new(1); // |0>
+    let channel = QuantumChannel::bit_flip(0.0); // identity
+    let sampler = Sampler::new().with_channel(channel);
+
+    let counts = sampler
+        .run_par(&state, &Measurement::z_basis(), &[0], 200)
+        .unwrap();
+
+    assert_eq!(*counts.get("0").unwrap(), 200);
+}
+
+// ─── run_par: seeded determinism ─────────────────────────────────────────────
+
+#[test]
+fn test_sampler_par_deterministic_with_seed() {
+    let run_once = |seed: u64| {
+        qcrypto::set_global_seed(seed);
+        let mut state = QuantumState::new(1);
+        state.apply(&Gate::h(), &[0]).unwrap();
+        let sampler = Sampler::new();
+        sampler
+            .run_par(&state, &Measurement::z_basis(), &[0], 1000)
+            .unwrap()
+    };
+
+    let c1 = run_once(77);
+    let c2 = run_once(77);
+    assert_eq!(c1, c2, "Same seed must produce identical counts");
+}
+
+#[test]
+fn test_sampler_par_different_seeds_differ() {
+    let run_once = |seed: u64| {
+        qcrypto::set_global_seed(seed);
+        let mut state = QuantumState::new(1);
+        state.apply(&Gate::h(), &[0]).unwrap();
+        let sampler = Sampler::new();
+        sampler
+            .run_par(&state, &Measurement::z_basis(), &[0], 1000)
+            .unwrap()
+    };
+
+    let c1 = run_once(2);
+    let c2 = run_once(998);
+    let n0_1 = *c1.get("0").unwrap_or(&0);
+    let n0_2 = *c2.get("0").unwrap_or(&0);
+    assert_ne!(n0_1, n0_2, "Different seeds should produce different results");
+}
+
+// ─── run_par: error propagation ──────────────────────────────────────────────
+
+#[test]
+fn test_sampler_par_out_of_bounds_target() {
+    let state = QuantumState::new(1);
+    let sampler = Sampler::new();
+
+    let result = sampler.run_par(&state, &Measurement::z_basis(), &[5], 10);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_sampler_par_dimension_mismatch() {
+    let state = QuantumState::new(1);
+    let sampler = Sampler::new();
+
+    let result = sampler.run_par(&state, &Measurement::bell_basis(), &[0], 10);
+    assert!(result.is_err());
+}
