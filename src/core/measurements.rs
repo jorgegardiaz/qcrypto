@@ -6,24 +6,28 @@ use num_complex::Complex64;
 /// Represents a general quantum measurement.
 ///
 /// A measurement is defined by a set of operators $\{M_k\}$ such that $\sum M_k^\dagger M_k = I$.
-/// It also associates a real value with each measurement outcome.
+/// Each outcome has an associated eigenvalue (physical value used in protocols) and a string label
+/// (used as the key in [`Sampler`](crate::Sampler) result maps).
 #[derive(Clone, Debug)]
 pub struct Measurement {
     /// List of measurement operators (Kraus operators).
     pub operators: Vec<Array2<Complex64>>,
-    /// Associated measurement values for each outcome.
-    pub values: Vec<f64>,
+    /// Physical eigenvalue associated with each outcome.
+    pub eigenvalues: Vec<f64>,
+    /// String label for each outcome, used as HashMap keys by the Sampler.
+    pub labels: Vec<String>,
     /// Number of qubits the measurement acts on.
     pub num_qubits: usize,
 }
 
 impl Measurement {
-    /// Creates a new `Measurement` from a set of operators and values.
+    /// Creates a new `Measurement` from a set of operators, eigenvalues, and labels.
     ///
     /// # Arguments
     ///
     /// * `operators` - A vector of `Array2<Complex64>` representing the measurement operators.
-    /// * `values` - A vector of `f64` values corresponding to the output of each operator.
+    /// * `eigenvalues` - Physical values associated with each outcome (used in protocols).
+    /// * `labels` - String labels for each outcome (used as keys in Sampler result maps).
     ///
     /// # Returns
     ///
@@ -32,7 +36,7 @@ impl Measurement {
     /// # Errors
     ///
     /// Returns `MeasurementError` if:
-    /// - The number of operators and values do not match.
+    /// - The counts of operators, eigenvalues, and labels do not all match.
     /// - The operators are not of correct dimensions.
     /// - The operators do not satisfy the completeness relation ($\sum M_k^\dagger M_k = I$).
     ///
@@ -44,17 +48,25 @@ impl Measurement {
     ///
     /// // Identity as a single trivial measurement
     /// let eye: Array2<Complex64> = Array2::eye(2);
-    /// let m = Measurement::new(vec![eye], vec![0.0]).unwrap();
+    /// let m = Measurement::new(vec![eye], vec![0.0], vec!["0".to_string()]).unwrap();
     /// assert_eq!(m.num_qubits, 1);
     /// ```
     pub fn new(
         operators: Vec<Array2<Complex64>>,
-        values: Vec<f64>,
+        eigenvalues: Vec<f64>,
+        labels: Vec<String>,
     ) -> Result<Self, MeasurementError> {
-        if operators.len() != values.len() {
+        if operators.len() != eigenvalues.len() {
             return Err(MeasurementError::CountMismatch {
                 ops: operators.len(),
-                vals: values.len(),
+                vals: eigenvalues.len(),
+            });
+        }
+
+        if labels.len() != eigenvalues.len() {
+            return Err(MeasurementError::CountMismatch {
+                ops: labels.len(),
+                vals: eigenvalues.len(),
             });
         }
 
@@ -81,7 +93,8 @@ impl Measurement {
 
         Ok(Self {
             operators,
-            values,
+            eigenvalues,
+            labels,
             num_qubits,
         })
     }
@@ -91,7 +104,8 @@ impl Measurement {
     /// # Arguments
     ///
     /// * `povm_elements` - A vector of POVM elements $\{E_k\}$ where each $E_k$ is positive semi-definite and $\sum E_k = I$.
-    /// * `values` - A vector of values associated with each POVM element.
+    /// * `eigenvalues` - Physical values associated with each POVM element (used in protocols).
+    /// * `labels` - String labels for each outcome (used as keys in Sampler result maps).
     ///
     /// # Returns
     ///
@@ -112,17 +126,25 @@ impl Measurement {
     /// // Z-basis POVM: |0><0| and |1><1|
     /// let p0 = Array2::from_diag(&ndarray::array![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
     /// let p1 = Array2::from_diag(&ndarray::array![Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)]);
-    /// let m = Measurement::from_povm(vec![p0, p1], vec![0.0, 1.0]).unwrap();
+    /// let m = Measurement::from_povm(vec![p0, p1], vec![0.0, 1.0], vec!["0".to_string(), "1".to_string()]).unwrap();
     /// assert_eq!(m.num_qubits, 1);
     /// ```
     pub fn from_povm(
         povm_elements: Vec<Array2<Complex64>>,
-        values: Vec<f64>,
+        eigenvalues: Vec<f64>,
+        labels: Vec<String>,
     ) -> Result<Self, MeasurementError> {
-        if povm_elements.len() != values.len() {
+        if povm_elements.len() != eigenvalues.len() {
             return Err(MeasurementError::CountMismatch {
                 ops: povm_elements.len(),
-                vals: values.len(),
+                vals: eigenvalues.len(),
+            });
+        }
+
+        if labels.len() != eigenvalues.len() {
+            return Err(MeasurementError::CountMismatch {
+                ops: labels.len(),
+                vals: eigenvalues.len(),
             });
         }
 
@@ -150,7 +172,8 @@ impl Measurement {
 
         Ok(Measurement {
             operators: kraus_ops,
-            values,
+            eigenvalues,
+            labels,
             num_qubits,
         })
     }
@@ -218,7 +241,12 @@ impl Measurement {
         let p0 = utils::outer_product(&v0, &v0);
         let p1 = utils::outer_product(&v1, &v1);
 
-        Measurement::new(vec![p0, p1], vec![0.0, 1.0]).expect("Error in basis Z")
+        Measurement::new(
+            vec![p0, p1],
+            vec![1.0, -1.0],
+            vec!["0".to_string(), "1".to_string()],
+        )
+        .expect("Error in basis Z")
     }
 
     /// Creates a measurement in the X basis (Hadamard basis) -> {|+>, |->}.
@@ -245,7 +273,12 @@ impl Measurement {
         let p_plus = utils::outer_product(&v_plus, &v_plus);
         let p_minus = utils::outer_product(&v_minus, &v_minus);
 
-        Measurement::new(vec![p_plus, p_minus], vec![0.0, 1.0]).expect("Error in basis X")
+        Measurement::new(
+            vec![p_plus, p_minus],
+            vec![1.0, -1.0],
+            vec!["0".to_string(), "1".to_string()],
+        )
+        .expect("Error in basis X")
     }
 
     /// Creates a measurement in the Y basis -> {|+i>, |-i>}.
@@ -272,7 +305,12 @@ impl Measurement {
         let p_plus_i = utils::outer_product(&v_plus_i, &v_plus_i);
         let p_minus_i = utils::outer_product(&v_minus_i, &v_minus_i);
 
-        Measurement::new(vec![p_plus_i, p_minus_i], vec![0.0, 1.0]).expect("Error in basis Y")
+        Measurement::new(
+            vec![p_plus_i, p_minus_i],
+            vec![1.0, -1.0],
+            vec!["0".to_string(), "1".to_string()],
+        )
+        .expect("Error in basis Y")
     }
 
     /// Creates a joint 2-qubit measurement in the mathematically inseparable Bell Basis.
@@ -316,18 +354,63 @@ impl Measurement {
         Measurement::new(
             vec![p_phi_plus, p_psi_plus, p_phi_minus, p_psi_minus],
             vec![0.0, 1.0, 2.0, 3.0],
+            vec![
+                "Φ+".to_string(),
+                "Ψ+".to_string(),
+                "Φ-".to_string(),
+                "Ψ-".to_string(),
+            ],
         )
         .expect("Error in Bell basis")
+    }
+
+    /// Returns a new measurement that acts on the joint system `self ⊗ other`.
+    ///
+    /// The resulting measurement has:
+    /// - `operators[i*n + j] = self.operators[i] ⊗ other.operators[j]`
+    /// - `eigenvalues[i*n + j] = self.eigenvalues[i] * other.eigenvalues[j]`
+    /// - `labels[i*n + j] = self.labels[i] + &other.labels[j]`
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::Measurement;
+    ///
+    /// let zz = Measurement::z_basis().compose(&Measurement::z_basis());
+    /// assert_eq!(zz.num_qubits, 2);
+    /// assert_eq!(zz.labels, vec!["00", "01", "10", "11"]);
+    /// ```
+    pub fn compose(&self, other: &Measurement) -> Measurement {
+        let n = self.operators.len() * other.operators.len();
+        let mut operators = Vec::with_capacity(n);
+        let mut eigenvalues = Vec::with_capacity(n);
+        let mut labels = Vec::with_capacity(n);
+
+        for (i, op_a) in self.operators.iter().enumerate() {
+            for (j, op_b) in other.operators.iter().enumerate() {
+                operators.push(utils::kronecker_product_matrix(op_a, op_b));
+                eigenvalues.push(self.eigenvalues[i] * other.eigenvalues[j]);
+                labels.push(format!("{}{}", self.labels[i], other.labels[j]));
+            }
+        }
+
+        Measurement {
+            operators,
+            eigenvalues,
+            labels,
+            num_qubits: self.num_qubits + other.num_qubits,
+        }
     }
 }
 
 /// The result of a quantum measurement.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MeasurementResult {
     /// The index of the outcome (and operator) that occurred.
     pub index: usize,
-    /// The value associated with the outcome.
+    /// The physical eigenvalue associated with the outcome.
     pub value: f64,
+    /// The string label associated with the outcome.
+    pub label: String,
 }
 
 #[cfg(test)]
@@ -338,10 +421,24 @@ mod tests {
 
     // --- Measurement::new boundary tests ---
 
+    fn s(v: &str) -> String {
+        v.to_string()
+    }
+
     #[test]
     fn test_new_count_mismatch() {
         let eye: Array2<Complex64> = Array2::eye(2);
-        let result = Measurement::new(vec![eye], vec![0.0, 1.0]);
+        let result = Measurement::new(vec![eye], vec![0.0, 1.0], vec![s("0"), s("1")]);
+        assert!(matches!(
+            result,
+            Err(MeasurementError::CountMismatch { .. })
+        ));
+    }
+
+    #[test]
+    fn test_new_labels_count_mismatch() {
+        let eye: Array2<Complex64> = Array2::eye(2);
+        let result = Measurement::new(vec![eye], vec![0.0], vec![s("0"), s("1")]);
         assert!(matches!(
             result,
             Err(MeasurementError::CountMismatch { .. })
@@ -350,28 +447,28 @@ mod tests {
 
     #[test]
     fn test_new_empty_operators() {
-        let result = Measurement::new(vec![], vec![]);
+        let result = Measurement::new(vec![], vec![], vec![]);
         assert!(matches!(result, Err(MeasurementError::InvalidDimensions)));
     }
 
     #[test]
     fn test_new_non_square_operator() {
         let matrix = Array2::from_shape_vec((2, 3), vec![Complex64::new(1.0, 0.0); 6]).unwrap();
-        let result = Measurement::new(vec![matrix], vec![0.0]);
+        let result = Measurement::new(vec![matrix], vec![0.0], vec![s("0")]);
         assert!(matches!(result, Err(MeasurementError::InvalidDimensions)));
     }
 
     #[test]
     fn test_new_non_power_of_two() {
         let matrix: Array2<Complex64> = Array2::eye(3);
-        let result = Measurement::new(vec![matrix], vec![0.0]);
+        let result = Measurement::new(vec![matrix], vec![0.0], vec![s("0")]);
         assert!(matches!(result, Err(MeasurementError::InvalidDimensions)));
     }
 
     #[test]
     fn test_new_not_complete() {
         let p0 = Array2::from_diag(&array![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
-        let result = Measurement::new(vec![p0], vec![0.0]);
+        let result = Measurement::new(vec![p0], vec![0.0], vec![s("0")]);
         assert!(matches!(result, Err(MeasurementError::NotComplete)));
     }
 
@@ -379,7 +476,7 @@ mod tests {
     fn test_new_mismatched_operator_sizes() {
         let k0: Array2<Complex64> = Array2::eye(2);
         let k1: Array2<Complex64> = Array2::eye(4);
-        let result = Measurement::new(vec![k0, k1], vec![0.0, 1.0]);
+        let result = Measurement::new(vec![k0, k1], vec![0.0, 1.0], vec![s("0"), s("1")]);
         assert!(matches!(result, Err(MeasurementError::InvalidDimensions)));
     }
 
@@ -388,7 +485,7 @@ mod tests {
     #[test]
     fn test_from_povm_count_mismatch() {
         let eye: Array2<Complex64> = Array2::eye(2);
-        let result = Measurement::from_povm(vec![eye], vec![0.0, 1.0]);
+        let result = Measurement::from_povm(vec![eye], vec![0.0, 1.0], vec![s("0"), s("1")]);
         assert!(matches!(
             result,
             Err(MeasurementError::CountMismatch { .. })
@@ -396,29 +493,37 @@ mod tests {
     }
 
     #[test]
+    fn test_from_povm_labels_count_mismatch() {
+        let p0 = Array2::from_diag(&array![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
+        let p1 = Array2::from_diag(&array![Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)]);
+        let result = Measurement::from_povm(vec![p0, p1], vec![0.0, 1.0], vec![s("0")]);
+        assert!(matches!(result, Err(MeasurementError::CountMismatch { .. })));
+    }
+
+    #[test]
     fn test_from_povm_empty() {
-        let result = Measurement::from_povm(vec![], vec![]);
+        let result = Measurement::from_povm(vec![], vec![], vec![]);
         assert!(matches!(result, Err(MeasurementError::InvalidDimensions)));
     }
 
     #[test]
     fn test_from_povm_non_square() {
         let matrix = Array2::from_shape_vec((2, 3), vec![Complex64::new(1.0, 0.0); 6]).unwrap();
-        let result = Measurement::from_povm(vec![matrix], vec![0.0]);
+        let result = Measurement::from_povm(vec![matrix], vec![0.0], vec![s("0")]);
         assert!(matches!(result, Err(MeasurementError::InvalidDimensions)));
     }
 
     #[test]
     fn test_from_povm_non_power_of_two() {
         let matrix: Array2<Complex64> = Array2::eye(3);
-        let result = Measurement::from_povm(vec![matrix], vec![0.0]);
+        let result = Measurement::from_povm(vec![matrix], vec![0.0], vec![s("0")]);
         assert!(matches!(result, Err(MeasurementError::InvalidDimensions)));
     }
 
     #[test]
     fn test_from_povm_not_complete() {
         let p0 = Array2::from_diag(&array![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
-        let result = Measurement::from_povm(vec![p0], vec![0.0]);
+        let result = Measurement::from_povm(vec![p0], vec![0.0], vec![s("0")]);
         assert!(matches!(result, Err(MeasurementError::NotComplete)));
     }
 
@@ -426,7 +531,7 @@ mod tests {
     fn test_from_povm_success() {
         let p0 = Array2::from_diag(&array![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
         let p1 = Array2::from_diag(&array![Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)]);
-        let m = Measurement::from_povm(vec![p0, p1], vec![0.0, 1.0]).unwrap();
+        let m = Measurement::from_povm(vec![p0, p1], vec![0.0, 1.0], vec![s("0"), s("1")]).unwrap();
         assert_eq!(m.num_qubits, 1);
         assert_eq!(m.operators.len(), 2);
     }
@@ -601,5 +706,33 @@ mod tests {
         assert!(probs[1].abs() < 1e-12);
         assert!(probs[2].abs() < 1e-12);
         assert!(probs[3].abs() < 1e-12);
+    }
+
+    // --- compose ---
+
+    #[test]
+    fn test_compose_z_z() {
+        let zz = Measurement::z_basis().compose(&Measurement::z_basis());
+        assert_eq!(zz.num_qubits, 2);
+        assert_eq!(zz.operators.len(), 4);
+        assert_eq!(zz.labels, vec!["00", "01", "10", "11"]);
+        assert_eq!(zz.eigenvalues, vec![1.0, -1.0, -1.0, 1.0]);
+    }
+
+    #[test]
+    fn test_compose_operator_dimensions() {
+        let zz = Measurement::z_basis().compose(&Measurement::z_basis());
+        for op in &zz.operators {
+            assert_eq!(op.dim(), (4, 4));
+        }
+    }
+
+    #[test]
+    fn test_compose_bell_x() {
+        let bx = Measurement::bell_basis().compose(&Measurement::x_basis());
+        assert_eq!(bx.num_qubits, 3);
+        assert_eq!(bx.operators.len(), 8);
+        assert_eq!(bx.labels[0], "Φ+0");
+        assert_eq!(bx.labels[1], "Φ+1");
     }
 }
