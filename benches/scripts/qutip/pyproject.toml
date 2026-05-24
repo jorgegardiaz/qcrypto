@@ -1,0 +1,11 @@
+[project]
+name = "qcrypto-qutip-bench"
+version = "0.1.0"
+description = "QuTiP benchmark comparison scripts for qcrypto"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "qutip>=5.3.0",
+    "numpy>=1.26",
+    "matplotlib>=3.9",
+]

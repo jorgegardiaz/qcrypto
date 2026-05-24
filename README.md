@@ -262,6 +262,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 <div align="center">
   <img src="./assets/qcryptool_logo.png" alt="qcryptool logo" width="130">
 
+  [![Pure Rust](https://img.shields.io/badge/Pure-Rust-orange)](https://www.rust-lang.org)
   [![Crates.io](https://img.shields.io/crates/v/qcryptool.svg)](https://crates.io/crates/qcryptool)
 </div>
 
