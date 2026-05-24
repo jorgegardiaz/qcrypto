@@ -521,8 +521,8 @@ impl StateDensityMatrix {
     /// // Measure in Z basis
     /// let result = state.measure(&Measurement::z_basis(), &[0]).unwrap();
     ///
-    /// // State |0> collapes to itself giving value 0.0
-    /// assert_eq!(result.value, 0.0);
+    /// // |0⟩ is the +1 eigenstate of Z
+    /// assert_eq!(result.value, 1.0);
     /// ```
     pub fn measure(
         &mut self,
@@ -576,7 +576,8 @@ impl StateDensityMatrix {
 
         Ok(MeasurementResult {
             index: outcome_idx,
-            value: measurement.values[outcome_idx],
+            value: measurement.eigenvalues[outcome_idx],
+            label: measurement.labels[outcome_idx].clone(),
         })
     }
 
@@ -799,6 +800,11 @@ impl QuantumStateImpl for StateDensityMatrix {
     ) -> Result<bool, StateError> {
         self.apply_channel(channel, target_qubits)?;
         Ok(true)
+    }
+
+    fn probabilities(&self) -> Vec<f64> {
+        let dim = 1 << self.num_qubits;
+        (0..dim).map(|i| self.density_matrix[[i, i]].re.max(0.0)).collect()
     }
 }
 
@@ -1111,7 +1117,7 @@ mod tests {
                 .measure(&Measurement::z_basis(), &[0])
                 .unwrap();
 
-            if result.value == 0.0 {
+            if result.label == "0" {
                 assert!((state.density_matrix[[0, 0]].re - 1.0).abs() < 1e-12);
                 assert!(state.density_matrix[[1, 1]].re.abs() < 1e-12);
                 hit_0 = true;
@@ -1198,6 +1204,24 @@ mod tests {
             result,
             Err(StateError::GateError(GateError::ControlTargetOverlap(0)))
         ));
+    }
+
+    #[test]
+    fn test_probabilities_ground_state() {
+        let state = StateDensityMatrix::new(1);
+        let probs = state.probabilities();
+        assert_eq!(probs.len(), 2);
+        assert!((probs[0] - 1.0).abs() < 1e-12);
+        assert!(probs[1].abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_probabilities_excited_state() {
+        let mut state = StateDensityMatrix::new(1);
+        state.apply(&Gate::x(), &[0]).unwrap();
+        let probs = state.probabilities();
+        assert!(probs[0].abs() < 1e-12);
+        assert!((probs[1] - 1.0).abs() < 1e-12);
     }
 
     #[test]

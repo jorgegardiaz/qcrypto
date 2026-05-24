@@ -96,7 +96,7 @@ fn swap_test_fail(received: QuantumState, basis: usize, value: bool) -> Result<b
     state.apply_controlled(&Gate::swap(), &[1, 2], &[0])?;
     state.apply(&Gate::h(), &[0])?;
     let result = state.measure(&Measurement::z_basis(), &[0])?;
-    Ok(result.value as usize == 1)
+    Ok(result.label == "1")
 }
 
 /// Variant of [`swap_test_fail`] using a [`LocalRng`] for deterministic parallel execution.
@@ -115,7 +115,7 @@ fn swap_test_fail_with_rng(
     state.apply_controlled(&Gate::swap(), &[1, 2], &[0])?;
     state.apply(&Gate::h(), &[0])?;
     let result = state.measure_with_rng(&Measurement::z_basis(), &[0], rng)?;
-    Ok(result.value as usize == 1)
+    Ok(result.label == "1")
 }
 
 /// Executes the GC01 Quantum Digital Signature protocol.

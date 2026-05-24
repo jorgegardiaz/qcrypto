@@ -54,7 +54,8 @@ fn angle_measurement(theta: f64) -> Measurement {
     let p0 = outer_product(&v0, &v0);
     let p1 = outer_product(&v1, &v1);
 
-    Measurement::new(vec![p0, p1], vec![0.0, 1.0]).expect("Invalid angle measurement")
+    Measurement::new(vec![p0, p1], vec![1.0, -1.0], vec!["0".to_string(), "1".to_string()])
+        .expect("Invalid angle measurement")
 }
 
 /// Calculates the correlation E(a, b) = (N_same - N_diff) / N_total.

@@ -122,7 +122,7 @@ pub fn run(
 
         let result = state.measure(&measurement, &[0])?;
 
-        let b_val = result.value as usize == 1;
+        let b_val = result.label == "1";
 
         alice_bits.push(a_bit);
         alice_bases.push(a_basis);
@@ -265,7 +265,7 @@ pub fn run_par(
                 Measurement::z_basis()
             };
             let result = state.measure_with_rng(&measurement, &[0], &mut rng)?;
-            let b_val = result.value as usize == 1;
+            let b_val = result.label == "1";
 
             Ok((a_bit, a_basis, b_basis, b_val, eve_intercepted))
         })

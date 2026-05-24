@@ -370,7 +370,11 @@ pub fn build_optimal_povm_b92() -> Result<Measurement, MeasurementError> {
     let identity = Array2::<Complex64>::eye(2);
     let e3 = identity - &e1 - &e2;
 
-    Measurement::from_povm(vec![e1, e2, e3], vec![1.0, 0.0, -1.0])
+    Measurement::from_povm(
+        vec![e1, e2, e3],
+        vec![1.0, 0.0, -1.0],
+        vec!["1".to_string(), "0".to_string(), "-1".to_string()],
+    )
 }
 
 #[cfg(test)]

@@ -113,6 +113,13 @@ pub trait QuantumStateImpl:
         channel: &QuantumChannel,
         target_qubits: &[usize],
     ) -> Result<bool, StateError>;
+    /// Returns the computational-basis probability for each basis state.
+    ///
+    /// For a `StateVector`: `p[i] = |amplitude[i]|²`.
+    /// For a `StateDensityMatrix`: `p[i] = Re(ρ[i,i])`, clamped to zero.
+    ///
+    /// The returned vector has length `2^num_qubits` and sums to 1.
+    fn probabilities(&self) -> Vec<f64>;
 }
 
 /// Represents a general quantum state that can be pure (vector) or mixed (density matrix).
@@ -288,7 +295,7 @@ impl QuantumState {
     ///
     /// let mut state = QuantumState::new(1);
     /// let result = state.measure(&Measurement::z_basis(), &[0]).unwrap();
-    /// assert_eq!(result.value, 0.0);
+    /// assert_eq!(result.value, 1.0); // |0⟩ is the +1 eigenstate of Z
     /// ```
     pub fn measure(
         &mut self,
@@ -310,7 +317,7 @@ impl QuantumState {
     /// let mut state = QuantumState::new(1);
     /// let mut rng = LocalRng::child(42, 0);
     /// let result = state.measure_with_rng(&Measurement::z_basis(), &[0], &mut rng).unwrap();
-    /// assert_eq!(result.value, 0.0);
+    /// assert_eq!(result.value, 1.0); // |0⟩ is the +1 eigenstate of Z
     /// ```
     pub fn measure_with_rng(
         &mut self,
@@ -413,6 +420,30 @@ impl QuantumState {
                 state: Box::new(dm1.compose(&dm2)?),
             })
         }
+    }
+
+    /// Returns the computational-basis probability for each basis state.
+    ///
+    /// This is a fast O(2^N) path that reads directly from amplitudes (StateVector)
+    /// or the diagonal of ρ (DensityMatrix), bypassing the general measurement machinery.
+    /// Use it when sampling all qubits in the Z basis.
+    ///
+    /// # Returns
+    ///
+    /// A `Vec<f64>` of length `2^num_qubits` with `p[i]` = probability of basis state `|i⟩`.
+    ///
+    /// # Example
+    /// ```rust
+    /// use qcrypto::{QuantumState, Gate};
+    ///
+    /// let mut state = QuantumState::new(1);
+    /// state.apply(&Gate::h(), &[0]).unwrap(); // |+>
+    /// let probs = state.probabilities();
+    /// assert!((probs[0] - 0.5).abs() < 1e-12);
+    /// assert!((probs[1] - 0.5).abs() < 1e-12);
+    /// ```
+    pub fn probabilities(&self) -> Vec<f64> {
+        self.state.probabilities()
     }
 
     /// Calculates the purity of the quantum state $Tr(\rho^2)$.
@@ -629,7 +660,7 @@ mod tests {
             state.apply(&Gate::h(), &[0]).unwrap();
             let result = state.measure(&Measurement::z_basis(), &[0]).unwrap();
             let vector = state.state.as_any().downcast_ref::<StateVector>().unwrap();
-            if result.value == 0.0 {
+            if result.label == "0" {
                 assert!((vector.amplitudes[0].re - 1.0).abs() < 1e-12);
                 assert!((vector.amplitudes[1].re).abs() < 1e-12);
                 hit_0 = true;
@@ -740,6 +771,15 @@ mod tests {
             .downcast_ref::<StateDensityMatrix>()
             .unwrap();
         assert!((dm.density_matrix[[3, 3]].re - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn test_quantum_state_probabilities() {
+        let mut state = QuantumState::new(1);
+        state.apply(&Gate::h(), &[0]).unwrap();
+        let probs = state.probabilities();
+        assert!((probs[0] - 0.5).abs() < 1e-12);
+        assert!((probs[1] - 0.5).abs() < 1e-12);
     }
 
     #[test]
