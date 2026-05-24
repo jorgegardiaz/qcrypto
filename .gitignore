@@ -1,3 +1,6 @@
 /target
 .DS_Store
 **/.DS_Store
+figures/
+data/
+__pycache__
