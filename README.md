@@ -297,6 +297,26 @@ See the [qcryptool repository](https://github.com/jorgegardiaz/qcryptool) for th
 
 ---
 
+## Benchmarks
+
+`qcrypto` ships a full benchmark suite under `benches/` that covers gate throughput, noise channel application cost, state-vector vs. density-matrix scaling, multi-shot sampling, and end-to-end execution of all protocol families (QKD, QIA, QDS). Two Python comparison scripts measure equivalent workloads against [Qiskit Aer](https://github.com/Qiskit/qiskit-aer) and [QuTiP](https://qutip.org), and a shell script orchestrates the complete pipeline.
+
+To run the Rust benchmarks:
+
+```bash
+cargo bench
+```
+
+To run the full pipeline including comparisons and figure generation:
+
+```bash
+./benches/scripts/reproduce.sh
+```
+
+See [`benches/README.md`](benches/README.md) for a detailed description of every benchmark, the comparison methodology, and CLI options for each script.
+
+---
+
 ## References
 
 If you use this software in your research or project, please cite it using the information in [CITATION](CITATION.cff). Additionally, if you use the QIA-QZKP protocol in your research, please cite the original paper:
