@@ -497,7 +497,10 @@ mod tests {
         let p0 = Array2::from_diag(&array![Complex64::new(1.0, 0.0), Complex64::new(0.0, 0.0)]);
         let p1 = Array2::from_diag(&array![Complex64::new(0.0, 0.0), Complex64::new(1.0, 0.0)]);
         let result = Measurement::from_povm(vec![p0, p1], vec![0.0, 1.0], vec![s("0")]);
-        assert!(matches!(result, Err(MeasurementError::CountMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(MeasurementError::CountMismatch { .. })
+        ));
     }
 
     #[test]

@@ -804,7 +804,9 @@ impl QuantumStateImpl for StateDensityMatrix {
 
     fn probabilities(&self) -> Vec<f64> {
         let dim = 1 << self.num_qubits;
-        (0..dim).map(|i| self.density_matrix[[i, i]].re.max(0.0)).collect()
+        (0..dim)
+            .map(|i| self.density_matrix[[i, i]].re.max(0.0))
+            .collect()
     }
 }
 

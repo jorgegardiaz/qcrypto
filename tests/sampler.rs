@@ -330,7 +330,11 @@ fn test_sampler_par_bell_basis_on_bell_state() {
         .run_par(&state, &Measurement::bell_basis(), &[0, 1], 500)
         .unwrap();
 
-    assert_eq!(counts.len(), 1, "Bell state measured in Bell basis should give one outcome");
+    assert_eq!(
+        counts.len(),
+        1,
+        "Bell state measured in Bell basis should give one outcome"
+    );
     let total: usize = counts.values().sum();
     assert_eq!(total, 500);
 }
@@ -398,7 +402,10 @@ fn test_sampler_par_different_seeds_differ() {
     let c2 = run_once(998);
     let n0_1 = *c1.get("0").unwrap_or(&0);
     let n0_2 = *c2.get("0").unwrap_or(&0);
-    assert_ne!(n0_1, n0_2, "Different seeds should produce different results");
+    assert_ne!(
+        n0_1, n0_2,
+        "Different seeds should produce different results"
+    );
 }
 
 // ─── run_par: error propagation ──────────────────────────────────────────────

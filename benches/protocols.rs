@@ -20,10 +20,10 @@
 //! benchmark group so results are bit-for-bit reproducible with `common::SEED`.
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use qcrypto::QuantumChannel;
 use qcrypto::protocols::qds::gc01;
 use qcrypto::protocols::qia::qia_qzkp;
 use qcrypto::protocols::qkd::{b92, bb84, bbm92, e91, sarg04, six_state};
-use qcrypto::QuantumChannel;
 use std::hint::black_box;
 use std::time::Duration;
 
@@ -58,7 +58,10 @@ fn channel_sweep() -> Vec<(&'static str, QuantumChannel)> {
         ("bit_flip_0.1", QuantumChannel::bit_flip(0.1)),
         ("phase_flip_0.1", QuantumChannel::phase_flip(0.1)),
         ("depolarizing_0.1", QuantumChannel::depolarizing(0.1)),
-        ("amplitude_damping_0.1", QuantumChannel::amplitude_damping(0.1)),
+        (
+            "amplitude_damping_0.1",
+            QuantumChannel::amplitude_damping(0.1),
+        ),
         ("phase_damping_0.1", QuantumChannel::phase_damping(0.1)),
         (
             "amp_phase_damping_0.1",
@@ -263,9 +266,7 @@ fn bench_qia_scaling(c: &mut Criterion) {
     for &n in QIA_SIZES {
         group.bench_with_input(BenchmarkId::new("QIA-QZKP", n), &n, |b, &n| {
             common::seed_thread();
-            b.iter(|| {
-                black_box(qia_qzkp::run_par(black_box(n), &channel, QIA_THRESHOLD).unwrap())
-            });
+            b.iter(|| black_box(qia_qzkp::run_par(black_box(n), &channel, QIA_THRESHOLD).unwrap()));
         });
         {
             common::seed_thread();
