@@ -103,7 +103,7 @@ if [[ $SKIP_QUTIP -eq 0 ]]; then
 
     cd "$QUTIP_DIR"
     uv run compare_qutip.py \
-        --repeats 20 \
+        --repeats 50 \
         --out "$DATA_DIR/qutip/qutip_results.csv" \
         --env-out "$DATA_DIR/qutip/qutip_environment.txt"
 
