@@ -17,6 +17,7 @@ use crate::rng::LocalRng;
 use crate::{Gate, Measurement, MeasurementResult, QuantumChannel, core::utils};
 use ndarray::Array1;
 use num_complex::Complex64;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// Represents a quantum state using a State Vector (pure state).
@@ -290,9 +291,11 @@ impl StateVector {
         }
 
         // p_k = || M_k |\psi> ||^2
-        let mut probs: Vec<f64> = measurement
-            .operators
-            .par_iter()
+        #[cfg(feature = "parallel")]
+        let ops_iter = measurement.operators.par_iter();
+        #[cfg(not(feature = "parallel"))]
+        let ops_iter = measurement.operators.iter();
+        let mut probs: Vec<f64> = ops_iter
             .map(|m_k| {
                 let temp = utils::apply_local_vector(
                     self.num_qubits,

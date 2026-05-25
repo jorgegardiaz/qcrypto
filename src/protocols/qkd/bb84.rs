@@ -4,8 +4,10 @@
 //! It uses four quantum states from two mutually unbiased bases (e.g., rectilinear and diagonal)
 //! to securely establish a shared secret key.
 
+#[cfg(feature = "parallel")]
 use crate::rng::LocalRng;
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// The result of the BB84 protocol execution.
@@ -216,6 +218,7 @@ pub fn run(
 ///
 /// assert_eq!(r1.alice_key, r2.alice_key);
 /// ```
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -398,6 +401,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bb84_par_zero_check() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -405,6 +409,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bb84_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -415,6 +420,7 @@ mod tests {
         assert_eq!(result.eve_intercepted_count, 0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bb84_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
@@ -433,6 +439,7 @@ mod tests {
         assert_eq!(r1.eve_intercepted_count, r2.eve_intercepted_count);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bb84_par_eve() {
         let channel = QuantumChannel::bit_flip(0.0);

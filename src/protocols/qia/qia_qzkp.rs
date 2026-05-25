@@ -3,8 +3,10 @@
 //! This module implements a QIA-QZKP scheme based on conjugate coding, allowing
 //! a prover to demonstrate his identity without revealing information about his secret.
 
+#[cfg(feature = "parallel")]
 use crate::rng::LocalRng;
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// The result of the QIA-QZKP protocol execution.
@@ -162,6 +164,7 @@ pub fn run(
 }
 
 /// Parallel variant of [`run`] using rayon. See [`run`] for protocol semantics.
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -279,6 +282,7 @@ mod tests {
         assert!(!result.authenticated);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_qia_qzkp_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -289,6 +293,7 @@ mod tests {
         assert!(result.authenticated);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_qia_qzkp_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
@@ -305,6 +310,7 @@ mod tests {
         assert_eq!(r1.matches, r2.matches);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_qia_qzkp_par_noise_rejection() {
         let channel = QuantumChannel::bit_flip(1.0);

@@ -3,6 +3,7 @@
 //! B92 is a simplified version of BB84 proposed by Charles Bennett in 1992.
 //! It uses only two non-orthogonal quantum states (e.g., |0> and |+>).
 
+#[cfg(feature = "parallel")]
 use crate::rng::LocalRng;
 use crate::{
     Gate, Measurement, QuantumChannel, QuantumState,
@@ -10,6 +11,7 @@ use crate::{
 };
 use ndarray::{Array2, arr2};
 use num_complex::Complex64;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// The result of the B92 protocol execution.
@@ -220,6 +222,7 @@ pub fn run(
 ///
 /// assert_eq!(r1.alice_key, r2.alice_key);
 /// ```
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -448,6 +451,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_b92_par_zero_check() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -456,6 +460,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_b92_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -467,6 +472,7 @@ mod tests {
         assert_eq!(result.eve_intercepted_count, 0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_b92_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
@@ -483,6 +489,7 @@ mod tests {
         assert_eq!(r1.bob_key, r2.bob_key);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_b92_par_eve() {
         let channel = QuantumChannel::bit_flip(0.0);

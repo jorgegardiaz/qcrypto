@@ -33,8 +33,11 @@
 //!
 //! **Eve model**: intercept-resend with a uniformly random basis from the 3 MUBs.
 
-use crate::rng::{self, LocalRng};
+use crate::rng;
+#[cfg(feature = "parallel")]
+use crate::rng::LocalRng;
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// The result of a GC01 protocol execution.
@@ -100,6 +103,7 @@ fn swap_test_fail(received: QuantumState, basis: usize, value: bool) -> Result<b
 }
 
 /// Variant of [`swap_test_fail`] using a [`LocalRng`] for deterministic parallel execution.
+#[cfg(feature = "parallel")]
 fn swap_test_fail_with_rng(
     received: QuantumState,
     basis: usize,
@@ -287,6 +291,7 @@ pub fn run(
 /// assert_eq!(r1.bob_mismatch_rate, r2.bob_mismatch_rate);
 /// assert_eq!(r1.private_key, r2.private_key);
 /// ```
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_qubits: usize,
     channel_bob: &QuantumChannel,
@@ -494,6 +499,7 @@ mod tests {
         assert!(result.signature_accepted);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_gc01_par_noiseless_accepted() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -506,6 +512,7 @@ mod tests {
         assert_eq!(result.eve_intercepted_count, 0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_gc01_par_message_noiseless_accepted() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -515,6 +522,7 @@ mod tests {
         assert!(result.signature_accepted);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_gc01_par_eve_detected() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -523,6 +531,7 @@ mod tests {
         assert!(result.eve_intercepted_count > 0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_gc01_par_zero_qubits() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -534,6 +543,7 @@ mod tests {
         assert!(result.signature_accepted);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_gc01_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);

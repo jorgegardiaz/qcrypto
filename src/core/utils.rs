@@ -9,6 +9,7 @@
 use nalgebra::DMatrix;
 use ndarray::{Array1, Array2, Axis};
 use num_complex::Complex64;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// Computes the Kronecker (Tensor) product of two matrices.
@@ -501,12 +502,12 @@ pub fn apply_local_left(
     // Dimension of the local operator (e.g., 2 for 1 target qubit, 4 for 2 target qubits).
     let k_dim = 1 << targets.len();
 
-    // Iterate over all columns in parallel. Left multiplication only mixes row elements.
-    new_rho
-        .axis_iter_mut(Axis(1))
-        .into_par_iter()
-        .enumerate()
-        .for_each(|(col, mut col_view)| {
+    // Iterate over all columns. Left multiplication only mixes row elements.
+    #[cfg(feature = "parallel")]
+    let iter = new_rho.axis_iter_mut(Axis(1)).into_par_iter();
+    #[cfg(not(feature = "parallel"))]
+    let iter = new_rho.axis_iter_mut(Axis(1)).into_iter();
+    iter.enumerate().for_each(|(col, mut col_view)| {
             for row in 0..dim {
                 if (row & control_mask) != control_mask {
                     col_view[row] = rho[[row, col]];
@@ -577,12 +578,12 @@ pub fn apply_local_right(
     let passive_mask = !target_mask;
     let k_dim = 1 << targets.len();
 
-    // Iterate over all rows in parallel. Right multiplication only mixes column elements.
-    new_rho
-        .axis_iter_mut(Axis(0))
-        .into_par_iter()
-        .enumerate()
-        .for_each(|(row, mut row_view)| {
+    // Iterate over all rows. Right multiplication only mixes column elements.
+    #[cfg(feature = "parallel")]
+    let iter = new_rho.axis_iter_mut(Axis(0)).into_par_iter();
+    #[cfg(not(feature = "parallel"))]
+    let iter = new_rho.axis_iter_mut(Axis(0)).into_iter();
+    iter.enumerate().for_each(|(row, mut row_view)| {
             for col in 0..dim {
                 if (col & control_mask) != control_mask {
                     row_view[col] = rho[[row, col]];
@@ -654,12 +655,12 @@ pub fn apply_local_vector(
     // In a state vector representation, left multiplication by an operator M is:
     // (M |psi>)_i = sum_j M_{ij} psi_j
     // where 'row' maps to 'i', and 'j' is constructed by iterating over small_col.
-    new_psi
-        .as_slice_mut()
-        .unwrap()
-        .par_iter_mut()
-        .enumerate()
-        .for_each(|(row, el)| {
+    let slice = new_psi.as_slice_mut().unwrap();
+    #[cfg(feature = "parallel")]
+    let iter = slice.par_iter_mut();
+    #[cfg(not(feature = "parallel"))]
+    let iter = slice.iter_mut();
+    iter.enumerate().for_each(|(row, el)| {
             if (row & control_mask) != control_mask {
                 *el = psi[row];
                 return;

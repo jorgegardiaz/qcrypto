@@ -4,8 +4,10 @@
 //! It is logically equivalent to BB84 but uses entangled photon pairs (EPR source) instead of single
 //! photon pulses prepared by Alice.
 
+#[cfg(feature = "parallel")]
 use crate::rng::LocalRng;
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// The result of the BBM92 protocol execution.
@@ -222,6 +224,7 @@ pub fn run(
 ///
 /// assert_eq!(r1.alice_key, r2.alice_key);
 /// ```
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_pairs: usize,
     channel_alice: &QuantumChannel,
@@ -402,6 +405,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bbm92_par_zero_check() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -409,6 +413,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bbm92_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -419,6 +424,7 @@ mod tests {
         assert_eq!(result.alice_key, result.bob_key);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bbm92_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
@@ -436,6 +442,7 @@ mod tests {
         assert_eq!(r1.bob_key, r2.bob_key);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_bbm92_par_eve() {
         let channel = QuantumChannel::bit_flip(0.0);

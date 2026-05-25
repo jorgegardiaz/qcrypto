@@ -4,8 +4,10 @@
 //! It is an extension of BB84 that uses three mutually unbiased bases (Z, X, and Y)
 //! instead of two, providing higher security against eavesdropping.
 
+#[cfg(feature = "parallel")]
 use crate::rng::LocalRng;
 use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// The result of the Six-State protocol execution.
@@ -226,6 +228,7 @@ pub fn run(
 ///
 /// assert_eq!(r1.alice_key, r2.alice_key);
 /// ```
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -415,6 +418,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_six_state_par_zero_check() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -422,6 +426,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_six_state_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -431,6 +436,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_six_state_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
@@ -448,6 +454,7 @@ mod tests {
         assert_eq!(r1.bob_key, r2.bob_key);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_six_state_par_eve() {
         let channel = QuantumChannel::bit_flip(0.0);

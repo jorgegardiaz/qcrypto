@@ -3,12 +3,14 @@
 //! E91 is an entanglement-based QKD protocol proposed by Ekert in 1991.
 //! It uses entangled photon pairs and Bell's inequality to ensure security.
 
+#[cfg(feature = "parallel")]
 use crate::rng::LocalRng;
 use crate::{
     Gate, Measurement, QuantumChannel, QuantumState, errors::StateError, utils::outer_product,
 };
 use ndarray::array;
 use num_complex::Complex64;
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::f64::consts::PI;
 
@@ -295,6 +297,7 @@ pub fn run(
 ///
 /// assert_eq!(r1.alice_key, r2.alice_key);
 /// ```
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_pairs: usize,
     channel_alice: &QuantumChannel,
@@ -520,6 +523,7 @@ mod tests {
         assert_eq!(result.qber, None);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_e91_par_zero_check() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -541,6 +545,7 @@ mod tests {
         assert_eq!(calculate_correlation(&[], &[], &[]), 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_e91_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -556,6 +561,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_e91_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
@@ -572,6 +578,7 @@ mod tests {
         assert_eq!(r1.chsh_value, r2.chsh_value);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_e91_par_noisy() {
         let channel = QuantumChannel::bit_flip(0.2); // High noise

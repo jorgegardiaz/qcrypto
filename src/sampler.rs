@@ -1,5 +1,7 @@
+#[cfg(feature = "parallel")]
 use crate::rng::LocalRng;
 use crate::{Measurement, QuantumChannel, QuantumState, errors::StateError};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -159,6 +161,8 @@ impl Sampler {
     /// Calling `qcrypto::set_global_seed` before this method makes the full output
     /// reproducible, because the master seed is derived deterministically from the seeded RNG.
     ///
+    /// Requires the `parallel` feature (enabled by default).
+    ///
     /// # Arguments
     ///
     /// * `state` - The quantum state to sample from.
@@ -191,6 +195,7 @@ impl Sampler {
     ///
     /// assert_eq!(r1, r2);
     /// ```
+    #[cfg(feature = "parallel")]
     pub fn run_par(
         &self,
         state: &QuantumState,
@@ -327,6 +332,8 @@ impl Sampler {
     /// drawn from the global RNG before entering the parallel section, so calling
     /// `qcrypto::set_global_seed` before this method makes the output fully reproducible.
     ///
+    /// Requires the `parallel` feature (enabled by default).
+    ///
     /// # Arguments
     ///
     /// * `state` - The quantum state to sample from.
@@ -354,6 +361,7 @@ impl Sampler {
     /// let r2 = Sampler::new().run_par_computational_basis(&state, 1000).unwrap();
     /// assert_eq!(r1, r2);
     /// ```
+    #[cfg(feature = "parallel")]
     pub fn run_par_computational_basis(
         &self,
         state: &QuantumState,
@@ -495,6 +503,7 @@ mod tests {
 
     // ── run_par unit tests ────────────────────────────────────────────────────
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_deterministic_state() {
         let state = QuantumState::new(1); // |0>
@@ -506,6 +515,7 @@ mod tests {
         assert_eq!(*counts.get("0").unwrap(), 200);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_excited_state() {
         let mut state = QuantumState::new(1);
@@ -518,6 +528,7 @@ mod tests {
         assert_eq!(*counts.get("1").unwrap(), 200);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_deterministic_with_seed() {
         let run_once = |seed: u64| {
@@ -535,6 +546,7 @@ mod tests {
         assert_eq!(c1, c2, "same seed must yield identical counts");
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_with_channel() {
         let state = QuantumState::new(1); // |0>
@@ -546,6 +558,7 @@ mod tests {
         assert_eq!(*counts.get("1").unwrap(), 100);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_errors_propagated() {
         let state = QuantumState::new(1);
@@ -591,6 +604,7 @@ mod tests {
         assert_eq!(*counts.get("1").unwrap(), 100);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_computational_basis_deterministic() {
         let mut state = QuantumState::new(2);
@@ -601,6 +615,7 @@ mod tests {
         assert_eq!(*counts.get("01").unwrap(), 100);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_computational_basis_with_channel() {
         let state = QuantumState::new(1); // |0>
@@ -610,6 +625,7 @@ mod tests {
         assert_eq!(*counts.get("1").unwrap(), 100);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_run_par_computational_basis_with_seed() {
         let run_once = |seed: u64| {

@@ -7,6 +7,7 @@ use crate::core::errors::StateError;
 use crate::core::state::QuantumState;
 use crate::rng::LocalRng;
 use crate::{Gate, Measurement, QuantumChannel};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// Result of a SARG04 protocol execution.
@@ -166,6 +167,7 @@ pub fn run(
 ///
 /// assert_eq!(r1.alice_key, r2.alice_key);
 /// ```
+#[cfg(feature = "parallel")]
 pub fn run_par(
     num_qubits: usize,
     channel: &QuantumChannel,
@@ -335,6 +337,7 @@ mod tests {
         assert_eq!(result.alice_key, result.bob_key);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_sarg04_par_deterministic_with_seed() {
         let channel = QuantumChannel::bit_flip(0.05);
@@ -358,6 +361,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_sarg04_par_zero_check() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -365,6 +369,7 @@ mod tests {
         assert_eq!(result.qber, 0.0);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_sarg04_par_noiseless() {
         let channel = QuantumChannel::bit_flip(0.0);
@@ -381,6 +386,7 @@ mod tests {
         assert!(result.qber > 0.1);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn test_sarg04_empty() {
         let channel = QuantumChannel::bit_flip(0.0);
