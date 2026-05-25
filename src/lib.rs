@@ -13,12 +13,6 @@
 //!
 //! - `parallel` (default): enables Rayon-based parallelism and the `run_par` variants of all protocols.
 //! - `serde`: enables `serde::Serialize` / `Deserialize` on the main types.
-//!
-//! # Examples
-//!
-//! ```rust
-//! // See examples/ directory for more usage examples.
-//! ```
 
 mod core;
 pub mod protocols;
