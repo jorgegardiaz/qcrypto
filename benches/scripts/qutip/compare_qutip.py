@@ -239,16 +239,38 @@ class Measurement:
     shots: int
     median_s: float
     mean_s: float
+    lower_s: float
+    upper_s: float
     stdev_s: float
     repeats: int
 
 
-def time_callable(fn: Callable[[], object], repeats: int) -> tuple[float, float, float]:
-    """Time fn() for `repeats` rounds after one warmup.  Returns (median, mean, stdev)."""
+def compute_confidence_interval(
+    samples: list[float], iterations: int = 1000, conf: float = 0.95
+) -> tuple[float, float]:
+    """Compute confidence interval for the median using bootstrapping."""
+    if len(samples) < 2:
+        return samples[0], samples[0]
+
+    boot_medians = []
+    for _ in range(iterations):
+        resample = np.random.choice(samples, size=len(samples), replace=True)
+        boot_medians.append(np.median(resample))
+
+    lower = np.percentile(boot_medians, (1 - conf) / 2 * 100)
+    upper = np.percentile(boot_medians, (1 + conf) / 2 * 100)
+    return float(lower), float(upper)
+
+
+def time_callable(
+    fn: Callable[[], object], repeats: int
+) -> tuple[float, float, float, float, float]:
+    """Time fn() for `repeats` rounds after one warmup.  Returns (median, mean, lower, upper, stdev)."""
     fn()  # warmup — not counted
     times = [timeit.timeit(fn, number=1) for _ in range(repeats)]
     stdev = statistics.stdev(times) if len(times) > 1 else 0.0
-    return statistics.median(times), statistics.mean(times), stdev
+    lower, upper = compute_confidence_interval(times)
+    return statistics.median(times), statistics.mean(times), lower, upper, stdev
 
 
 # ---------------------------------------------------------------------------
@@ -286,8 +308,10 @@ def bench_channels(qubits: list[int], repeats: int) -> list[Measurement]:
                 kraus_nq = _expand_kraus(k1q, 0, nq)
                 return _apply_kraus(kraus_nq, rho)
 
-            med, mean, sd = time_callable(task, repeats)
-            out.append(Measurement(f"channel_{name}", n, 0, med, mean, sd, repeats))
+            med, mean, low, up, sd = time_callable(task, repeats)
+            out.append(
+                Measurement(f"channel_{name}", n, 0, med, mean, low, up, sd, repeats)
+            )
             print(f"  channel_{name} n={n:2d}: {med * 1e3:.3f} ms")
     return out
 
@@ -327,8 +351,12 @@ def bench_metrics(qubits: list[int], repeats: int) -> list[Measurement]:
         def task_purity(rho: Qobj = rho_qt) -> float:
             return 1.0 - float(entropy_linear(rho))
 
-        med_p, mean_p, sd_p = time_callable(task_purity, repeats)
-        out.append(Measurement("metric_purity", n, 0, med_p, mean_p, sd_p, repeats))
+        med_p, mean_p, low_p, up_p, sd_p = time_callable(task_purity, repeats)
+        out.append(
+            Measurement(
+                "metric_purity", n, 0, med_p, mean_p, low_p, up_p, sd_p, repeats
+            )
+        )
         print(f"  n={n:2d}: purity={task_purity():.4f}  |  {med_p * 1e6:.1f} µs")
     return out
 
@@ -374,8 +402,10 @@ def bench_lindblad(qubits: list[int], repeats: int) -> list[Measurement]:
         def task(H: Qobj = H, rho0: Qobj = rho0, c_op: Qobj = c_op) -> object:
             return mesolve(H, rho0, tlist, c_ops=[c_op])
 
-        med, mean, sd = time_callable(task, repeats)
-        out.append(Measurement("lindblad_evolution", n, 0, med, mean, sd, repeats))
+        med, mean, low, up, sd = time_callable(task, repeats)
+        out.append(
+            Measurement("lindblad_evolution", n, 0, med, mean, low, up, sd, repeats)
+        )
         print(f"  n={n:2d}: {med * 1e3:.3f} ms")
     return out
 
@@ -389,11 +419,13 @@ def write_csv(path: str, rows: list[Measurement]) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w") as f:
-        f.write("simulator,task,qubits,shots,median_s,mean_s,stdev_s,repeats\n")
+        f.write(
+            "simulator,task,qubits,shots,median_s,mean_s,lower_s,upper_s,stdev_s,repeats\n"
+        )
         for m in rows:
             f.write(
                 f"qutip,{m.task},{m.qubits},{m.shots},"
-                f"{m.median_s:.9f},{m.mean_s:.9f},{m.stdev_s:.9f},{m.repeats}\n"
+                f"{m.median_s:.9f},{m.mean_s:.9f},{m.lower_s:.9f},{m.upper_s:.9f},{m.stdev_s:.9f},{m.repeats}\n"
             )
     print(f"\nResults written to {path}")
 
@@ -402,7 +434,7 @@ def write_environment(path: str) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     with p.open("w") as f:
-        f.write("# qcrypto QuTiP benchmark environment\n")
+        f.write("# QuTiP benchmark environment\n")
         f.write(f"qutip_version = {qutip.__version__}\n")
         f.write(f"numpy_version = {np.__version__}\n")
         f.write(f"python_version = {platform.python_version()}\n")
@@ -425,7 +457,7 @@ def main() -> None:
         default=[2, 3, 4, 5, 6, 8, 10],
         help="Qubit counts for density-matrix benchmarks.",
     )
-    ap.add_argument("--repeats", type=int, default=20)
+    ap.add_argument("--repeats", type=int, default=50)
     ap.add_argument("--out", default="../../data/qutip/qutip_results.csv")
     ap.add_argument("--env-out", default="../../data/qutip/qutip_environment.txt")
     ap.add_argument(

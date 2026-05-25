@@ -53,6 +53,7 @@ import timeit
 from dataclasses import dataclass
 
 try:
+    import numpy as np
     import qiskit
     import qiskit_aer
     from qiskit import QuantumCircuit, transpile
@@ -68,8 +69,32 @@ class Measurement:
     shots: int
     median_s: float
     mean_s: float
+    lower_s: float
+    upper_s: float
     stdev_s: float
     repeats: int
+
+
+# ---------------------------------------------------------------------------
+# Statistics utility
+# ---------------------------------------------------------------------------
+
+
+def compute_confidence_interval(
+    samples: list[float], iterations: int = 1000, conf: float = 0.95
+) -> tuple[float, float]:
+    """Compute confidence interval for the median using bootstrapping."""
+    if len(samples) < 2:
+        return samples[0], samples[0]
+
+    boot_medians = []
+    for _ in range(iterations):
+        resample = np.random.choice(samples, size=len(samples), replace=True)
+        boot_medians.append(np.median(resample))
+
+    lower = np.percentile(boot_medians, (1 - conf) / 2 * 100)
+    upper = np.percentile(boot_medians, (1 + conf) / 2 * 100)
+    return float(lower), float(upper)
 
 
 # ---------------------------------------------------------------------------
@@ -99,13 +124,14 @@ def build_superposition_circuit(n: int) -> QuantumCircuit:
 # ---------------------------------------------------------------------------
 
 
-def time_callable(fn, repeats: int) -> tuple[float, float, float]:
-    """Run ``fn()`` *repeats* times; return (median, mean, stdev) in seconds."""
+def time_callable(fn, repeats: int) -> tuple[float, float, float, float, float]:
+    """Run ``fn()`` *repeats* times; return (median, mean, lower, upper, stdev) in seconds."""
     samples = [timeit.timeit(fn, number=1) for _ in range(repeats)]
     median = statistics.median(samples)
     mean = statistics.fmean(samples)
     stdev = statistics.stdev(samples) if len(samples) > 1 else 0.0
-    return median, mean, stdev
+    lower, upper = compute_confidence_interval(samples)
+    return median, mean, lower, upper, stdev
 
 
 # ---------------------------------------------------------------------------
@@ -126,8 +152,10 @@ def bench_statevector(qubits: list[int], repeats: int) -> list[Measurement]:
             sim.run(qc).result()
 
         task()  # warmup
-        med, mean, sd = time_callable(task, repeats)
-        out.append(Measurement("statevector_ghz", n, 0, med, mean, sd, repeats))
+        med, mean, low, up, sd = time_callable(task, repeats)
+        out.append(
+            Measurement("statevector_ghz", n, 0, med, mean, low, up, sd, repeats)
+        )
         print(f"  [SV-GHZ ] {n:2d} qubits: median {med * 1e3:8.3f} ms")
     return out
 
@@ -148,8 +176,10 @@ def bench_sampling(
                 sim.run(qc, shots=s).result().get_counts()
 
             task()  # warmup
-            med, mean, sd = time_callable(task, repeats)
-            out.append(Measurement("sampling", n, shots, med, mean, sd, repeats))
+            med, mean, low, up, sd = time_callable(task, repeats)
+            out.append(
+                Measurement("sampling", n, shots, med, mean, low, up, sd, repeats)
+            )
             print(
                 f"  [SMP    ] {n:2d} qubits, {shots:>9d} shots: median {med * 1e3:8.3f} ms"
             )
@@ -196,8 +226,10 @@ def bench_gates(qubits: list[int], repeats: int) -> list[Measurement]:
                 sim.run(qc).result()
 
             task()  # warmup
-            med, mean, sd = time_callable(task, repeats)
-            out.append(Measurement(f"gate_{gate_name}", n, 0, med, mean, sd, repeats))
+            med, mean, low, up, sd = time_callable(task, repeats)
+            out.append(
+                Measurement(f"gate_{gate_name}", n, 0, med, mean, low, up, sd, repeats)
+            )
             print(f"  [GATE-{gate_name:3s}] {n:2d} qubits: median {med * 1e6:8.3f} µs")
     return out
 
@@ -221,6 +253,8 @@ def write_csv(path: str, rows: list[Measurement]) -> None:
                 "shots",
                 "median_s",
                 "mean_s",
+                "lower_s",
+                "upper_s",
                 "stdev_s",
                 "repeats",
             ]
@@ -234,6 +268,8 @@ def write_csv(path: str, rows: list[Measurement]) -> None:
                     m.shots,
                     f"{m.median_s:.9f}",
                     f"{m.mean_s:.9f}",
+                    f"{m.lower_s:.9f}",
+                    f"{m.upper_s:.9f}",
                     f"{m.stdev_s:.9f}",
                     m.repeats,
                 ]
@@ -251,7 +287,7 @@ def write_environment(path: str) -> None:
         qiskit_v = "unknown"
         aer_v = "unknown"
     with open(path, "w") as f:
-        f.write("# qiskit comparison environment\n")
+        f.write("# Qiskit comparison environment\n")
         f.write(f"qiskit_version = {qiskit_v}\n")
         f.write(f"qiskit_aer_version = {aer_v}\n")
         f.write(f"python_version = {platform.python_version()}\n")
@@ -279,7 +315,7 @@ def main() -> None:
         nargs="+",
         default=[100_000, 1_000_000],
     )
-    ap.add_argument("--repeats", type=int, default=20)
+    ap.add_argument("--repeats", type=int, default=50)
     ap.add_argument("--out", default="../data/qiskit/aer_results.csv")
     ap.add_argument("--env-out", default="../data/qiskit/aer_environment.txt")
     ap.add_argument(
