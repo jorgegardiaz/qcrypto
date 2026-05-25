@@ -100,9 +100,10 @@ pub fn run(
                 Measurement::z_basis()
             };
             let _ = state.measure(&m, &[0])?;
-        }
 
-        state.apply_channel(channel, &[0])?;
+            // Eve send qubit to Bob through channel
+            state.apply_channel(channel, &[0])?;
+        }
 
         let b_basis = crate::rng::random_bool(0.5);
         let m = if b_basis {
@@ -203,9 +204,9 @@ pub fn run_par(
                     Measurement::z_basis()
                 };
                 let _ = state.measure_with_rng(&m, &[0], &mut rng)?;
-            }
 
-            state.apply_channel(channel, &[0])?;
+                state.apply_channel(channel, &[0])?;
+            }
 
             let m = if b_basis {
                 Measurement::x_basis()

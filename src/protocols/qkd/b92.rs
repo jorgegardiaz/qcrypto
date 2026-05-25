@@ -105,10 +105,10 @@ pub fn run(
                 Measurement::z_basis()
             };
             let _ = state.measure(&m, &[0])?;
-        }
 
-        // Eve send qubit to Bob through channel
-        state.apply_channel(channel, &[0])?;
+            // Eve send qubit to Bob through channel
+            state.apply_channel(channel, &[0])?;
+        }
 
         // Bob measures using his POVM
         let res = state.measure(bob_device, &[0])?;
@@ -254,9 +254,9 @@ pub fn run_par(
                     Measurement::z_basis()
                 };
                 let _ = state.measure_with_rng(&m, &[0], &mut rng)?;
-            }
 
-            state.apply_channel(channel, &[0])?;
+                state.apply_channel(channel, &[0])?;
+            }
 
             let res = state.measure_with_rng(measurement, &[0], &mut rng)?;
             let res_code = match res.index {

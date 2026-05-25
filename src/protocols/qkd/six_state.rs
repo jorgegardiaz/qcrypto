@@ -119,10 +119,10 @@ pub fn run(
             };
 
             state.measure(&measurement, &[0])?;
-        }
 
-        // Eve send qubit to Bob through channel
-        state.apply_channel(channel, &[0])?;
+            // Eve send qubit to Bob through channel
+            state.apply_channel(channel, &[0])?;
+        }
 
         // Bob measures
         let b_basis = crate::rng::random_usize_range(0, 3);
@@ -270,9 +270,9 @@ pub fn run_par(
                     _ => Measurement::z_basis(),
                 };
                 state.measure_with_rng(&measurement, &[0], &mut rng)?;
-            }
 
-            state.apply_channel(channel, &[0])?;
+                state.apply_channel(channel, &[0])?;
+            }
 
             let b_basis = rng.random_usize_range(0, 3);
             let measurement = match b_basis {

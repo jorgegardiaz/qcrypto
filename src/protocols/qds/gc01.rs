@@ -201,8 +201,11 @@ pub fn run(
                 _ => Measurement::z_basis(),
             };
             let _ = bob_qubit.measure(&eve_measurement, &[0])?;
+
+            // Eve sends qubit to Bob through quantum channel
+            bob_qubit.apply_channel(channel_bob, &[0])?;
         }
-        bob_qubit.apply_channel(channel_bob, &[0])?;
+
         if swap_test_fail(bob_qubit, basis, value)? {
             bob_mismatches += 1;
         }
@@ -334,8 +337,8 @@ pub fn run_par(
                     _ => Measurement::z_basis(),
                 };
                 let _ = bob_qubit.measure_with_rng(&eve_measurement, &[0], &mut rng)?;
+                bob_qubit.apply_channel(channel_bob, &[0])?;
             }
-            bob_qubit.apply_channel(channel_bob, &[0])?;
             let bob_mismatch = swap_test_fail_with_rng(bob_qubit, basis, value, &mut rng)?;
 
             let mut charlie_qubit = prepare_qowf_state(basis, value)?;

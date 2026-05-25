@@ -165,10 +165,10 @@ pub fn run(
             eve_intercept_count += 1;
             let e_idx = crate::rng::random_usize_range(0, eve_measurements.len());
             let _ = state.measure(&eve_measurements[e_idx], &[1])?;
-        }
 
-        // Eve send qubit to Bob through channel
-        state.apply_channel(channel_bob, &[1])?;
+            // Eve send qubit to Bob through channel
+            state.apply_channel(channel_bob, &[1])?;
+        }
 
         // Alice and Bob choose random bases
         let a_idx = crate::rng::random_usize_range(0, a_measurements.len());
@@ -341,9 +341,9 @@ pub fn run_par(
             if eve_intercepted {
                 let e_idx = rng.random_usize_range(0, a_measurements.len());
                 let _ = state.measure_with_rng(&a_measurements[e_idx], &[1], &mut rng)?;
-            }
 
-            state.apply_channel(channel_bob, &[1])?;
+                state.apply_channel(channel_bob, &[1])?;
+            }
 
             let a_idx = rng.random_usize_range(0, a_measurements.len());
             let b_idx = rng.random_usize_range(0, b_measurements.len());
