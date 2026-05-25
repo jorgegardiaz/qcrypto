@@ -50,8 +50,17 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
 
 # --- Publication aesthetics -------------------------------------------------
+
+COLOR_QCRYPTO = "tab:orange"
+COLOR_QISKIT = "tab:blue"
+COLOR_QUTIP = "tab:green"
+
+# Internal qcrypto formalism colors (Option 1: Rust-themed palette)
+COLOR_SV = "tab:orange"
+COLOR_DM = "saddlebrown"
 plt.rcParams.update(
     {
         "figure.figsize": (6.0, 4.0),
@@ -200,6 +209,10 @@ def fig_scaling_time(crit: pd.DataFrame, out: Path) -> None:
     fig, ax = plt.subplots()
     for fn, grp in sub.groupby("function"):
         grp = grp.sort_values("qubits")
+        # Use Rust-themed colors for high contrast
+        color = COLOR_SV if fn == "StateVector" else COLOR_DM
+        lstyle = "-" if fn == "StateVector" else "--"
+        marker = "o" if fn == "StateVector" else "s"
         ax.errorbar(
             grp["qubits"],
             grp["point_ns"] / 1e6,
@@ -207,15 +220,17 @@ def fig_scaling_time(crit: pd.DataFrame, out: Path) -> None:
                 (grp["point_ns"] - grp["lower_ns"]) / 1e6,
                 (grp["upper_ns"] - grp["point_ns"]) / 1e6,
             ],
-            marker="o",
+            marker=marker,
+            linestyle=lstyle,
             capsize=3,
+            color=color,
             label=str(fn) or "state",
         )
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
     ax.set_ylabel("GHZ build time (ms, log scale)")
     ax.set_title("Time scaling: StateVector vs DensityMatrix")
-    ax.legend()
+    ax.legend(loc="upper left")
     fig.tight_layout()
     _save(fig, out, "fig_scaling_time")
 
@@ -229,12 +244,22 @@ def fig_scaling_memory(data_qcrypto: Path, out: Path) -> None:
     fig, ax = plt.subplots()
     for st, grp in df.groupby("state_type"):
         grp = grp.sort_values("qubits")
-        ax.plot(grp["qubits"], grp["bytes"] / 1e6, marker="s", label=str(st))
+        color = COLOR_SV if st == "StateVector" else COLOR_DM
+        lstyle = "-" if st == "StateVector" else "--"
+        marker = "o" if st == "StateVector" else "s"
+        ax.plot(
+            grp["qubits"],
+            grp["bytes"] / 1e6,
+            marker=marker,
+            linestyle=lstyle,
+            color=color,
+            label=str(st),
+        )
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
     ax.set_ylabel("Theoretical memory (MB, log scale)")
     ax.set_title(r"Memory footprint: $O(2^N)$ vs $O(4^N)$")
-    ax.legend()
+    ax.legend(loc="upper left")
     fig.tight_layout()
     _save(fig, out, "fig_scaling_memory")
 
@@ -258,22 +283,42 @@ def fig_channels(crit: pd.DataFrame, out: Path) -> None:
     sub["regime"] = split.map(lambda t: t[1])
     sub = _drop_na(sub, "qubits")
 
-    fig, ax = plt.subplots(figsize=(7.0, 4.5))
-    for key, grp in sub.groupby(["channel", "regime"]):
-        ch, reg = str(key[0]), str(key[1])  # type: ignore[index]
-        grp = grp.sort_values("qubits")
-        ax.plot(
-            grp["qubits"],
-            grp["point_ns"] / 1e3,
-            "-" if reg == "warm" else "--",
-            marker="o",
-            label=f"{ch} ({reg})",
-        )
-    ax.set_yscale("log")
-    ax.set_xlabel("Number of qubits")
-    ax.set_ylabel("Channel application time (µs, log scale)")
-    ax.set_title("Noise channel cost (cold includes SV→DM conversion)")
-    ax.legend(ncol=2, fontsize=7)
+    channels = sorted(sub["channel"].unique())
+    cmap = plt.get_cmap("tab10")
+    channel_colors = {ch: cmap(i) for i, ch in enumerate(channels)}
+
+    fig, (ax_warm, ax_cold) = plt.subplots(1, 2, figsize=(12.0, 5.0), sharey=True)
+
+    for regime, ax in zip(["warm", "cold"], [ax_warm, ax_cold]):
+        reg_sub = _where(sub, "regime", regime)
+        for ch, grp in reg_sub.groupby("channel"):
+            grp = grp.sort_values("qubits")
+            ax.plot(
+                grp["qubits"],
+                grp["point_ns"] / 1e3,
+                marker="o",
+                color=channel_colors[ch],
+            )
+        ax.set_yscale("log")
+        ax.set_xlabel("Number of qubits")
+        ax.set_title(f"Regime: {regime.upper()}")
+        if ax is ax_warm:
+            ax.set_ylabel("Channel application time (µs, log scale)")
+
+    # Shared legend using proxies
+    channel_proxies = [
+        Line2D([0], [0], color=channel_colors[ch], lw=2, label=ch.replace("_", " "))
+        for ch in channels
+    ]
+    ax_warm.legend(
+        handles=channel_proxies,
+        loc="upper left",
+        ncol=2,
+        fontsize=8,
+        title="Channels",
+    )
+
+    fig.suptitle("Noise channel cost: Warm (DM only) vs Cold (SV→DM) path")
     fig.tight_layout()
     _save(fig, out, "fig_channels")
 
@@ -301,9 +346,9 @@ def fig_protocols(crit: pd.DataFrame, out: Path) -> None:
             label=str(proto),
         )
     ax.set_xlabel("Key length (qubits / pairs)")
-    ax.set_ylabel("Wall time (ms)")
+    ax.set_ylabel("Excution time (ms)")
     ax.set_title("QKD protocol scaling (BB84, B92, BBM92, E91, SixState, SARG04)")
-    ax.legend()
+    ax.legend(loc="upper left")
     fig.tight_layout()
     _save(fig, out, "fig_protocols")
 
@@ -322,6 +367,7 @@ def fig_qber(data_qcrypto: Path, out: Path) -> None:
         index="channel", columns="protocol", values="qber", aggfunc="mean"
     )
     pivot.plot(kind="bar", ax=ax)
+    ax.legend(loc="upper left")
     ax.set_xlabel("Channel")
     ax.set_ylabel("QBER")
     ax.set_title("QBER by channel (correctness verification)")
@@ -337,7 +383,7 @@ def fig_gates_sv_dm(crit: pd.DataFrame, out: Path) -> None:
         ("gates/two_qubit_CNOT", "CNOT (2 qubits)", "--", "x"),
         ("gates/three_qubit_Toffoli", "Toffoli (3 qubits)", ":", "s"),
     ]
-    colors = {"StateVector": "tab:blue", "DensityMatrix": "tab:orange"}
+    colors = {"StateVector": COLOR_SV, "DensityMatrix": COLOR_DM}
 
     fig, ax = plt.subplots(figsize=(7.0, 4.5))
     found = False
@@ -365,19 +411,124 @@ def fig_gates_sv_dm(crit: pd.DataFrame, out: Path) -> None:
                 linestyle=lstyle,
                 marker=marker,
                 color=color,
-                label=f"{fn} — {gate_label}",
             )
     if not found:
         print("  [skip] gates/* not found in criterion data")
         plt.close(fig)
         return
+
+    # Consolidate legend
+    formalism_proxies = [
+        Line2D([0], [0], color=COLOR_SV, lw=2, label="StateVector"),
+        Line2D([0], [0], color=COLOR_DM, lw=2, label="DensityMatrix"),
+    ]
+    gate_proxies = [
+        Line2D(
+            [0], [0], color="gray", marker="o", linestyle="-", label="X gate (1 qubit)"
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="gray",
+            marker="x",
+            linestyle="--",
+            label="CNOT gate (2 qubits)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="gray",
+            marker="s",
+            linestyle=":",
+            label="Toffoli gate (3 qubits)",
+        ),
+    ]
+
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
     ax.set_ylabel("Gate application time (ms, log scale)")
     ax.set_title("Gate Application Time: StateVector vs DensityMatrix")
-    ax.legend(ncol=2, fontsize=8)
+    ax.legend(
+        handles=formalism_proxies + gate_proxies, loc="upper left", ncol=2, fontsize=8
+    )
     fig.tight_layout()
     _save(fig, out, "fig_gates_sv_dm")
+
+
+def fig_conversion(crit: pd.DataFrame, out: Path) -> None:
+    """Benchmark SV -> DM conversion cost (identity channel)."""
+    sub = _by_group(crit, "conversion/sv_to_dm")
+    if sub.empty:
+        print("  [skip] conversion/sv_to_dm not found")
+        return
+    sub["qubits"] = _col(sub, "value").map(_numeric)
+    sub = _drop_na(sub, "qubits").sort_values("qubits")
+
+    fig, ax = plt.subplots()
+    ax.plot(
+        sub["qubits"],
+        sub["point_ns"] / 1e6,
+        marker="o",
+        color=COLOR_DM,
+        label="SV → DM promotion",
+    )
+    ax.fill_between(
+        sub["qubits"],
+        sub["lower_ns"] / 1e6,
+        sub["upper_ns"] / 1e6,
+        color=COLOR_DM,
+        alpha=0.15,
+    )
+    ax.set_yscale("log")
+    ax.set_xlabel("Number of qubits")
+    ax.set_ylabel("Promotion time (ms, log scale)")
+    ax.set_title("Dual-State Architecture: StateVector → DensityMatrix cost")
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    _save(fig, out, "fig_conversion")
+
+
+def fig_measurement(crit: pd.DataFrame, out: Path) -> None:
+    """Benchmark Z-basis measurement on GHZ states."""
+    sub = _by_group(crit, "measurement/z_basis")
+    if sub.empty:
+        print("  [skip] measurement/z_basis not found")
+        return
+    sub["qubits"] = _col(sub, "value").map(_numeric)
+    sub = _drop_na(sub, "qubits")
+
+    fig, ax = plt.subplots()
+    for fn, grp in sub.groupby("function"):
+        grp = grp.sort_values("qubits")
+        is_all = "all" in str(fn)
+        color = COLOR_DM if is_all else COLOR_SV
+        lstyle = "-" if not is_all else "--"
+        marker = "s" if is_all else "o"
+        label = "Measure all qubits (seq)" if is_all else "Measure 1 qubit"
+
+        ax.plot(
+            grp["qubits"],
+            grp["point_ns"] / 1e6,
+            marker=marker,
+            linestyle=lstyle,
+            color=color,
+            label=label,
+        )
+        ax.fill_between(
+            grp["qubits"],
+            grp["lower_ns"] / 1e6,
+            grp["upper_ns"] / 1e6,
+            color=color,
+            alpha=0.1,
+        )
+
+    ax.set_yscale("log")
+    ax.set_xlabel("Number of qubits")
+    ax.set_ylabel("Measurement time (ms, log scale)")
+    ax.set_title("Measurement performance: Single vs Sequential")
+    ax.legend(loc="upper left")
+    fig.tight_layout()
+    _save(fig, out, "fig_measurement")
 
 
 def fig_sampling_qcrypto(crit: pd.DataFrame, out: Path) -> None:
@@ -398,6 +549,7 @@ def fig_sampling_qcrypto(crit: pd.DataFrame, out: Path) -> None:
         sub["qubits"],
         sub["point_ns"] / 1e6,
         marker="o",
+        color=COLOR_QCRYPTO,
         label="qcrypto (1M shots)",
     )
 
@@ -405,7 +557,7 @@ def fig_sampling_qcrypto(crit: pd.DataFrame, out: Path) -> None:
     ax.set_xlabel("Number of qubits")
     ax.set_ylabel("Sampling time (ms, log scale)")
     ax.set_title("qcrypto Sampling Performance: 1,000,000 shots")
-    ax.legend()
+    ax.legend(loc="upper left")
     fig.tight_layout()
     _save(fig, out, "fig_sampling_qcrypto", category="qcrypto")
 
@@ -434,29 +586,41 @@ def fig_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None:
         return
 
     fig, ax = plt.subplots()
-    ax.errorbar(
+    ax.plot(
         qc["qubits"],
         qc["point_ns"] / 1e6,
-        yerr=[
-            (qc["point_ns"] - qc["lower_ns"]) / 1e6,
-            (qc["upper_ns"] - qc["point_ns"]) / 1e6,
-        ],
         marker="o",
-        capsize=3,
+        color=COLOR_QCRYPTO,
         label="qcrypto (Rust)",
+    )
+    ax.fill_between(
+        qc["qubits"],
+        qc["lower_ns"] / 1e6,
+        qc["upper_ns"] / 1e6,
+        color=COLOR_QCRYPTO,
+        alpha=0.15,
     )
     ax.plot(
         aer_sv["qubits"],
         aer_sv["median_s"] * 1e3,
         marker="s",
         linestyle="--",
+        color=COLOR_QISKIT,
         label="Qiskit Aer",
     )
+    if "lower_s" in aer_sv.columns and "upper_s" in aer_sv.columns:
+        ax.fill_between(
+            aer_sv["qubits"],
+            aer_sv["lower_s"] * 1e3,
+            aer_sv["upper_s"] * 1e3,
+            color=COLOR_QISKIT,
+            alpha=0.15,
+        )
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
     ax.set_ylabel("GHZ build time (ms, log scale)")
     ax.set_title("qcrypto vs Qiskit Aer (state vector, GHZ)")
-    ax.legend()
+    ax.legend(loc="upper left")
     fig.tight_layout()
     _save(fig, out, "fig_ghz_vs_qiskit", category="qiskit")
 
@@ -487,8 +651,14 @@ def fig_gates_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None:
                 sub["point_ns"] / 1e6,
                 marker=marker,
                 linestyle=lstyle,
-                color="tab:blue",
-                label=f"qcrypto — {label}",
+                color=COLOR_QCRYPTO,
+            )
+            ax.fill_between(
+                sub["qubits"],
+                sub["lower_ns"] / 1e6,
+                sub["upper_ns"] / 1e6,
+                color=COLOR_QCRYPTO,
+                alpha=0.1,
             )
             found = True
         aer_sub = _where(aer, "task", aer_task).copy()
@@ -499,19 +669,54 @@ def fig_gates_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None:
                 aer_sub["median_s"] * 1e3,
                 marker=marker,
                 linestyle=lstyle,
-                color="tab:orange",
-                label=f"Aer — {label}",
+                color=COLOR_QISKIT,
             )
+            if "lower_s" in aer_sub.columns and "upper_s" in aer_sub.columns:
+                ax.fill_between(
+                    aer_sub["qubits"],
+                    aer_sub["lower_s"] * 1e3,
+                    aer_sub["upper_s"] * 1e3,
+                    color=COLOR_QISKIT,
+                    alpha=0.1,
+                )
             found = True
     if not found:
         print("  [skip] no data for gate comparison")
         plt.close(fig)
         return
+
+    # Consolidate legend
+    sim_proxies = [
+        Line2D([0], [0], color=COLOR_QCRYPTO, lw=2, label="qcrypto (Rust)"),
+        Line2D([0], [0], color=COLOR_QISKIT, lw=2, label="Qiskit Aer"),
+    ]
+    gate_proxies = [
+        Line2D(
+            [0], [0], color="gray", marker="o", linestyle="-", label="X gate (1 qubit)"
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="gray",
+            marker="x",
+            linestyle="--",
+            label="CNOT gate (2 qubits)",
+        ),
+        Line2D(
+            [0],
+            [0],
+            color="gray",
+            marker="s",
+            linestyle=":",
+            label="Toffoli gate (3 qubits)",
+        ),
+    ]
+
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
     ax.set_ylabel("Gate application time (ms, log scale)")
     ax.set_title("qcrypto vs Qiskit Aer: X, CNOT, Toffoli")
-    ax.legend(ncol=2, fontsize=8)
+    ax.legend(handles=sim_proxies + gate_proxies, loc="upper left", ncol=2, fontsize=8)
     fig.tight_layout()
     _save(fig, out, "fig_gates_vs_qiskit", category="qiskit")
 
@@ -573,7 +778,7 @@ def fig_channels_vs_qutip(crit: pd.DataFrame, qutip_csv: Path, out: Path) -> Non
                 ],
                 marker="o",
                 capsize=3,
-                color="tab:blue",
+                color=COLOR_QCRYPTO,
                 label="qcrypto",
             )
             found_any = True
@@ -582,14 +787,29 @@ def fig_channels_vs_qutip(crit: pd.DataFrame, qutip_csv: Path, out: Path) -> Non
         qt_sub = _where(qutip_df, "task", f"channel_{ch_name}").copy()
         qt_sub = qt_sub.sort_values("qubits")
         if not qt_sub.empty:
-            ax.plot(
-                _col(qt_sub, "qubits"),
-                _col(qt_sub, "median_s") * 1e3,
-                marker="s",
-                linestyle="--",
-                color="tab:orange",
-                label="QuTiP",
-            )
+            if "lower_s" in qt_sub.columns and "upper_s" in qt_sub.columns:
+                ax.errorbar(
+                    qt_sub["qubits"],
+                    qt_sub["median_s"] * 1e3,
+                    yerr=[
+                        (qt_sub["median_s"] - qt_sub["lower_s"]) * 1e3,
+                        (qt_sub["upper_s"] - qt_sub["median_s"]) * 1e3,
+                    ],
+                    marker="s",
+                    linestyle="--",
+                    capsize=3,
+                    color=COLOR_QUTIP,
+                    label="QuTiP",
+                )
+            else:
+                ax.plot(
+                    qt_sub["qubits"],
+                    qt_sub["median_s"] * 1e3,
+                    marker="s",
+                    linestyle="--",
+                    color=COLOR_QUTIP,
+                    label="QuTiP",
+                )
             found_any = True
 
         ax.set_yscale("log")
@@ -597,7 +817,7 @@ def fig_channels_vs_qutip(crit: pd.DataFrame, qutip_csv: Path, out: Path) -> Non
         ax.set_title(ch_name.replace("_", " "))
         if ax is axes[0]:
             ax.set_ylabel("Channel application time (ms, log scale)")
-        ax.legend(fontsize=8)
+        ax.legend(loc="upper left", fontsize=8)
 
     if not found_any:
         print("  [skip] no data for QuTiP channel comparison")
@@ -642,23 +862,38 @@ def fig_purity_vs_qutip(crit: pd.DataFrame, qutip_csv: Path, out: Path) -> None:
             ],
             marker="o",
             capsize=3,
-            color="tab:blue",
+            color=COLOR_QCRYPTO,
             label="qcrypto (Rust)",
         )
     if not qt_sub.empty:
-        ax.plot(
-            _col(qt_sub, "qubits"),
-            _col(qt_sub, "median_s") * 1e3,
-            marker="s",
-            linestyle="--",
-            color="tab:orange",
-            label="QuTiP (Python)",
-        )
+        if "lower_s" in qt_sub.columns and "upper_s" in qt_sub.columns:
+            ax.errorbar(
+                qt_sub["qubits"],
+                qt_sub["median_s"] * 1e3,
+                yerr=[
+                    (qt_sub["median_s"] - qt_sub["lower_s"]) * 1e3,
+                    (qt_sub["upper_s"] - qt_sub["median_s"]) * 1e3,
+                ],
+                marker="s",
+                linestyle="--",
+                capsize=3,
+                color=COLOR_QUTIP,
+                label="QuTiP (Python)",
+            )
+        else:
+            ax.plot(
+                _col(qt_sub, "qubits"),
+                _col(qt_sub, "median_s") * 1e3,
+                marker="s",
+                linestyle="--",
+                color=COLOR_QUTIP,
+                label="QuTiP (Python)",
+            )
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
     ax.set_ylabel("Purity Tr(ρ²) computation time (ms, log scale)")
     ax.set_title("Purity computation: qcrypto vs QuTiP")
-    ax.legend()
+    ax.legend(loc="upper left")
     fig.tight_layout()
     _save(fig, out, "fig_purity_vs_qutip", category="qutip")
 
@@ -699,7 +934,7 @@ def fig_sampling_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None
                 ],
                 marker="o",
                 capsize=3,
-                color="tab:blue",
+                color=COLOR_QCRYPTO,
                 label="qcrypto Sampler",
             )
             found = True
@@ -710,14 +945,29 @@ def fig_sampling_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None
         ).copy()
         if not aer_sub.empty:
             aer_sub = aer_sub.sort_values("qubits")
-            ax.plot(
-                _col(aer_sub, "qubits"),
-                _col(aer_sub, "median_s") * 1e3,
-                marker="s",
-                linestyle="--",
-                color="tab:orange",
-                label="Qiskit Aer",
-            )
+            if "lower_s" in aer_sub.columns and "upper_s" in aer_sub.columns:
+                ax.errorbar(
+                    aer_sub["qubits"],
+                    aer_sub["median_s"] * 1e3,
+                    yerr=[
+                        (aer_sub["median_s"] - aer_sub["lower_s"]) * 1e3,
+                        (aer_sub["upper_s"] - aer_sub["median_s"]) * 1e3,
+                    ],
+                    marker="s",
+                    linestyle="--",
+                    capsize=3,
+                    color=COLOR_QISKIT,
+                    label="Qiskit Aer",
+                )
+            else:
+                ax.plot(
+                    _col(aer_sub, "qubits"),
+                    _col(aer_sub, "median_s") * 1e3,
+                    marker="s",
+                    linestyle="--",
+                    color=COLOR_QISKIT,
+                    label="Qiskit Aer",
+                )
             found = True
 
         ax.set_yscale("log")
@@ -725,7 +975,7 @@ def fig_sampling_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None
         if ax is axes[0]:
             ax.set_ylabel("Sampling time (ms, log scale)")
         ax.set_title(f"{shots_label} shots")
-        ax.legend(fontsize=8)
+        ax.legend(loc="upper left", fontsize=8)
 
     if not found:
         print("  [skip] no data for sampling comparison")
@@ -780,6 +1030,8 @@ def main() -> None:
     fig_protocols(crit, out)
     fig_qber(data_qcrypto, out)
     fig_gates_sv_dm(crit, out)
+    fig_conversion(crit, out)
+    fig_measurement(crit, out)
     fig_sampling_qcrypto(crit, out)
 
     # qiskit
