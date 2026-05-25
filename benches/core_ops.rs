@@ -289,6 +289,7 @@ fn bench_sampling(c: &mut Criterion) {
     }
 }
 
+#[cfg(feature = "parallel")]
 criterion_group!(
     benches,
     bench_gates,
@@ -297,4 +298,5 @@ criterion_group!(
     bench_purity,
     bench_sampling
 );
+#[cfg(feature = "parallel")]
 criterion_main!(benches);

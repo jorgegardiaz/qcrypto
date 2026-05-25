@@ -12,6 +12,7 @@ use rayon::prelude::*;
 
 /// Result of a SARG04 protocol execution.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SARG04Result {
     /// The total length of the raw key (number of qubits sent).
     pub raw_length: usize,

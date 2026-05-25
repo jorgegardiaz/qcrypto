@@ -8,6 +8,7 @@ use num_complex::Complex64;
 /// A quantum channel is a completely positive trace-preserving (CPTP) map,
 /// represented by a set of Kraus operators $\{K_i\}$ satisfying $\sum K_i^\dagger K_i = I$.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QuantumChannel {
     /// The Kraus operators defining the channel.
     pub kraus_ops: Vec<Array2<Complex64>>,

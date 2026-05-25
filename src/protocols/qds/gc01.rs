@@ -40,7 +40,8 @@ use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError}
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-/// The result of a GC01 protocol execution.
+/// The result of the GC01 protocol execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GC01Result {
     /// The total length of each public key (number of qubits per message value).
     pub num_qubits: usize,

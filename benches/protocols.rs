@@ -322,6 +322,7 @@ fn bench_qds_scaling(c: &mut Criterion) {
     csv.flush();
 }
 
+#[cfg(feature = "parallel")]
 criterion_group!(
     benches,
     bench_qkd_scaling,
@@ -329,4 +330,5 @@ criterion_group!(
     bench_qia_scaling,
     bench_qds_scaling
 );
+#[cfg(feature = "parallel")]
 criterion_main!(benches);

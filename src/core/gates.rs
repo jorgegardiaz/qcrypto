@@ -8,6 +8,7 @@ use std::f64::consts::PI;
 ///
 /// A gate is defined by its unitary matrix and the number of qubits it acts on.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Gate {
     /// The unitary matrix of the gate.
     pub matrix: Array2<Complex64>,

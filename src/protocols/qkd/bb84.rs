@@ -11,6 +11,7 @@ use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError}
 use rayon::prelude::*;
 
 /// The result of the BB84 protocol execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct BB84Result {
     /// The total length of the raw key (number of qubits sent).
     pub raw_length: usize,

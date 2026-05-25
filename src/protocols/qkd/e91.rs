@@ -15,6 +15,7 @@ use rayon::prelude::*;
 use std::f64::consts::PI;
 
 /// The result of the E91 protocol execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct E91Result {
     /// The total length of the raw key (number of entangled pairs).
     pub raw_length: usize,

@@ -15,6 +15,7 @@ use num_complex::Complex64;
 use rayon::prelude::*;
 
 /// The result of the B92 protocol execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct B92Result {
     /// The total length of the raw key (number of qubits sent).
     pub raw_length: usize,

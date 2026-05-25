@@ -508,29 +508,29 @@ pub fn apply_local_left(
     #[cfg(not(feature = "parallel"))]
     let iter = new_rho.axis_iter_mut(Axis(1)).into_iter();
     iter.enumerate().for_each(|(col, mut col_view)| {
-            for row in 0..dim {
-                if (row & control_mask) != control_mask {
-                    col_view[row] = rho[[row, col]];
+        for row in 0..dim {
+            if (row & control_mask) != control_mask {
+                col_view[row] = rho[[row, col]];
+                continue;
+            }
+
+            let small_row = extract_bits(row, &mapped_targets);
+            let mut sum = Complex64::new(0.0, 0.0);
+
+            for small_col in 0..k_dim {
+                let val = local_matrix[[small_row, small_col]];
+
+                if val.norm_sqr() < f64::EPSILON {
                     continue;
                 }
 
-                let small_row = extract_bits(row, &mapped_targets);
-                let mut sum = Complex64::new(0.0, 0.0);
-
-                for small_col in 0..k_dim {
-                    let val = local_matrix[[small_row, small_col]];
-
-                    if val.norm_sqr() < f64::EPSILON {
-                        continue;
-                    }
-
-                    let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
-                    sum += val * rho[[m, col]];
-                }
-
-                col_view[row] = sum;
+                let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
+                sum += val * rho[[m, col]];
             }
-        });
+
+            col_view[row] = sum;
+        }
+    });
 
     new_rho
 }
@@ -584,29 +584,29 @@ pub fn apply_local_right(
     #[cfg(not(feature = "parallel"))]
     let iter = new_rho.axis_iter_mut(Axis(0)).into_iter();
     iter.enumerate().for_each(|(row, mut row_view)| {
-            for col in 0..dim {
-                if (col & control_mask) != control_mask {
-                    row_view[col] = rho[[row, col]];
+        for col in 0..dim {
+            if (col & control_mask) != control_mask {
+                row_view[col] = rho[[row, col]];
+                continue;
+            }
+
+            let small_col_idx = extract_bits(col, &mapped_targets);
+            let mut sum = Complex64::new(0.0, 0.0);
+
+            for small_row_idx in 0..k_dim {
+                let val = local_matrix[[small_row_idx, small_col_idx]];
+
+                if val.norm_sqr() < f64::EPSILON {
                     continue;
                 }
 
-                let small_col_idx = extract_bits(col, &mapped_targets);
-                let mut sum = Complex64::new(0.0, 0.0);
-
-                for small_row_idx in 0..k_dim {
-                    let val = local_matrix[[small_row_idx, small_col_idx]];
-
-                    if val.norm_sqr() < f64::EPSILON {
-                        continue;
-                    }
-
-                    let m = (col & passive_mask) | deposit_bits(small_row_idx, &mapped_targets);
-                    sum += rho[[row, m]] * val;
-                }
-
-                row_view[col] = sum;
+                let m = (col & passive_mask) | deposit_bits(small_row_idx, &mapped_targets);
+                sum += rho[[row, m]] * val;
             }
-        });
+
+            row_view[col] = sum;
+        }
+    });
 
     new_rho
 }
@@ -661,27 +661,27 @@ pub fn apply_local_vector(
     #[cfg(not(feature = "parallel"))]
     let iter = slice.iter_mut();
     iter.enumerate().for_each(|(row, el)| {
-            if (row & control_mask) != control_mask {
-                *el = psi[row];
-                return;
+        if (row & control_mask) != control_mask {
+            *el = psi[row];
+            return;
+        }
+
+        let small_row = extract_bits(row, &mapped_targets);
+        let mut sum = Complex64::new(0.0, 0.0);
+
+        for small_col in 0..k_dim {
+            let val = local_matrix[[small_row, small_col]];
+
+            if val.norm_sqr() < f64::EPSILON {
+                continue;
             }
 
-            let small_row = extract_bits(row, &mapped_targets);
-            let mut sum = Complex64::new(0.0, 0.0);
+            let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
+            sum += val * psi[m];
+        }
 
-            for small_col in 0..k_dim {
-                let val = local_matrix[[small_row, small_col]];
-
-                if val.norm_sqr() < f64::EPSILON {
-                    continue;
-                }
-
-                let m = (row & passive_mask) | deposit_bits(small_col, &mapped_targets);
-                sum += val * psi[m];
-            }
-
-            *el = sum;
-        });
+        *el = sum;
+    });
 
     new_psi
 }

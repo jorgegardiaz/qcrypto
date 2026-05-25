@@ -10,6 +10,7 @@ use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError}
 use rayon::prelude::*;
 
 /// The result of the QIA-QZKP protocol execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct QiaQZKPResult {
     /// Total number of qubits used.
     pub total_qubits: usize,

@@ -11,6 +11,7 @@ use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError}
 use rayon::prelude::*;
 
 /// The result of the BBM92 protocol execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Bbm92Result {
     /// The total length of the raw key (number of entangled pairs).
     pub raw_length: usize,

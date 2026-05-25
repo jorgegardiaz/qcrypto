@@ -87,5 +87,7 @@ fn bench_channels(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "parallel")]
 criterion_group!(benches, bench_channels);
+#[cfg(feature = "parallel")]
 criterion_main!(benches);

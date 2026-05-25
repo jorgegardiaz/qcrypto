@@ -9,6 +9,7 @@ use num_complex::Complex64;
 /// Each outcome has an associated eigenvalue (physical value used in protocols) and a string label
 /// (used as the key in [`Sampler`](crate::Sampler) result maps).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Measurement {
     /// List of measurement operators (Kraus operators).
     pub operators: Vec<Array2<Complex64>>,

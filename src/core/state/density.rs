@@ -24,6 +24,7 @@ use rayon::prelude::*;
 /// The physical state is mathematically represented by a $2^N \times 2^N$ density matrix $\rho$,
 /// satisfying $\rho^\dagger = \rho$, $\text{Tr}(\rho) = 1$, and $\rho \ge 0$.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StateDensityMatrix {
     /// The mathematical $2^N \times 2^N$ density matrix corresponding to the mixed state.
     pub density_matrix: Array2<Complex64>,

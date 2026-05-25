@@ -22,6 +22,7 @@ use rayon::prelude::*;
 
 /// Represents a quantum state using a State Vector (pure state).
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StateVector {
     /// The probability amplitudes of the state vector.
     pub amplitudes: Array1<Complex64>,

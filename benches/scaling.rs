@@ -108,5 +108,7 @@ fn bench_scaling(c: &mut Criterion) {
     group.finish();
 }
 
+#[cfg(feature = "parallel")]
 criterion_group!(benches, bench_scaling);
+#[cfg(feature = "parallel")]
 criterion_main!(benches);

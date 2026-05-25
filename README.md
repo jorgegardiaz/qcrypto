@@ -43,6 +43,19 @@ Run the following command in your project directory:
 ```bash
 cargo add qcrypto
 ```
+
+### Cargo features
+
+- `parallel` (default): enables Rayon-based parallelism and the `run_par` variants of all protocols.
+- `serde`: enables `serde::Serialize` / `Deserialize` on the main types.
+
+Disable Rayon for WASM or embedded targets:
+
+```toml
+[dependencies]
+qcrypto = { version = "x.x", default-features = false }
+```
+
 ---
 
 ## Library Architecture

@@ -10,7 +10,8 @@ use crate::{Gate, Measurement, QuantumChannel, QuantumState, errors::StateError}
 #[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
-/// The result of the Six-State protocol execution.
+/// The result of the SixState protocol execution.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SixStateResult {
     /// The total length of the raw key (number of qubits sent).
     pub raw_length: usize,
