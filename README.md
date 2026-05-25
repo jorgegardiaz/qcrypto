@@ -214,10 +214,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let channel_alice = QuantumChannel::depolarizing(0.1);
     let channel_bob = QuantumChannel::depolarizing(0.05);
 
-    // Lock the RNG for this thread to a specific seed
+    // Lock the RNG to a specific seed
     set_global_seed(42);
 
-    // Every call to bbm92::run or QuantumState::measure on this thread
+    // Every call to bbm92::run or QuantumState::measure
     // will now be 100% deterministic and reproducible.
     let result = bbm92::run_par(1000, &channel_alice, &channel_bob, 1.0, 0.2)?;
 
@@ -246,7 +246,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create a CSV file for output
     let mut file = File::create("bb84_results.csv")?;
-    writeln!(file, "Noise,Execution,QBER,EstablishedKeyLength")?;
+    writeln!(file, "Noise,Execution,QBER,KeyLength")?;
 
     // Iterate over different noise configurations
     for &noise in &noise_levels {
@@ -260,7 +260,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             writeln!(
                 file,
                 "{:.2},{},{:.2},{}",
-                noise, execution, result.qber, result.total_sifted,
+                noise, execution, result.qber, result.alice_key.len(),
             )?;
         }
     }
