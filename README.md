@@ -24,7 +24,7 @@
 
 Unlike general-purpose quantum simulators that strictly focus on state-vector evolution for logical circuits, `qcrypto` implements an intelligent **Dual-State Architecture**. It dynamically switches between highly-efficient **State Vectors** for pure states and robust **Density Matrices** when open quantum systems, decoherence, or noisy channels are introduced. This design choice enables both high-performance execution of unitary logical circuits and the precise simulation of generalized measurements (POVMs) and hardware vulnerabilities.
 
-The library is implemented in **100% Safe Rust**, eliminating external dependencies.
+The library is implemented in **100% Safe Rust**, minimizing external dependencies and with a pure-Rust dependency tree.
 
 ## Key Features
 
