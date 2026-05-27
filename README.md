@@ -11,7 +11,7 @@
   [![Pure Rust](https://img.shields.io/badge/Pure-Rust-orange)](https://www.rust-lang.org)
   [![Crates.io](https://img.shields.io/crates/v/qcrypto.svg)](https://crates.io/crates/qcrypto)
   [![Docs](https://docs.rs/qcrypto/badge.svg)](https://docs.rs/qcrypto)
-  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+  [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE)
   [![Rust CI](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml/badge.svg)](https://github.com/jorgegardiaz/qcrypto/actions/workflows/test.yml)
   ![Coverage](https://raw.githubusercontent.com/jorgegardiaz/qcrypto/master/.github/badges/coverage.svg)
 
@@ -338,7 +338,12 @@ If you use this software in your research or project, please cite it using the i
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+This project is dual-licensed under either:
+
+- [MIT License](LICENSE)
+- [Apache License, Version 2.0](LICENSE-APACHE)
+
+at your option.
 
 ## Contributing
 

@@ -8,7 +8,7 @@ keywords = ["quantum", "cryptography", "simulation", "qkd", "physics"]
 categories = ["cryptography", "simulation", "science"]
 repository = "https://github.com/jorgegardiaz/qcrypto"
 readme = "README.md"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 
 [lib]
 name = "qcrypto"
