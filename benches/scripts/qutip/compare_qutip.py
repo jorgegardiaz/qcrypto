@@ -362,55 +362,6 @@ def bench_metrics(qubits: list[int], repeats: int) -> list[Measurement]:
 
 
 # ---------------------------------------------------------------------------
-# Test 3: Lindblad evolution
-# ---------------------------------------------------------------------------
-
-
-def bench_lindblad(qubits: list[int], repeats: int) -> list[Measurement]:
-    """Amplitude damping via mesolve (continuous Lindblad master equation).
-
-    H=0, collapse operator L=√γ·σ₋ on qubit 0, evolved over t∈[0,1].
-    This is EXACTLY equivalent to one discrete Kraus step with parameter γ
-    because both implement the same Markovian Lindblad channel; the
-    correspondence is K0=exp(−γ/2·a†a), K1=√γ·a where a=σ₋.
-
-    Note: mesolve integrates a continuous ODE so its overhead (solver setup,
-    step control) is NOT comparable to qcrypto's single matrix multiplication.
-    These timings characterise QuTiP's ODE overhead, not channel throughput.
-    """
-    try:
-        from qutip import mesolve  # type: ignore[attr-defined]
-    except ImportError:
-        print("\n--- Test 3: Lindblad evolution [skipped — mesolve not available] ---")
-        return []
-
-    print("\n--- Test 3: Lindblad evolution (amplitude damping, H=0) ---")
-    gamma = 0.1
-    out: list[Measurement] = []
-
-    for n in qubits:
-        rho0 = _uniform_dm(n)
-        dim = 2**n
-        H = Qobj(np.zeros((dim, dim), dtype=complex), dims=[[2] * n, [2] * n])
-
-        sigma_minus = np.array([[0, 1], [0, 0]], dtype=complex)
-        c_1q = _qobj_oper(np.sqrt(gamma) * sigma_minus)
-        c_op = tensor(*[c_1q if i == 0 else qeye(2) for i in range(n)])
-
-        tlist = [0.0, 1.0]
-
-        def task(H: Qobj = H, rho0: Qobj = rho0, c_op: Qobj = c_op) -> object:
-            return mesolve(H, rho0, tlist, c_ops=[c_op])
-
-        med, mean, low, up, sd = time_callable(task, repeats)
-        out.append(
-            Measurement("lindblad_evolution", n, 0, med, mean, low, up, sd, repeats)
-        )
-        print(f"  n={n:2d}: {med * 1e3:.3f} ms")
-    return out
-
-
-# ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
 
