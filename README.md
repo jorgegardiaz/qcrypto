@@ -33,6 +33,7 @@ The library is implemented in **100% Safe Rust**, minimizing external dependenci
   - [Cargo Features](#cargo-features)
 - [Library Architecture](#library-architecture)
   - [Core Structures](#core-structures)
+  - [Qubit Ordering Convention](#qubit-ordering-convention)
 - [Implemented Protocols](#implemented-protocols)
   - [1. BB84](#1-bb84-bennett--brassard-1984)
   - [2. B92 with Optimal POVM](#2-b92-bennett-1992-with-optimal-povm)
@@ -96,6 +97,10 @@ qcrypto = { version = "x.x", default-features = false }
 * **`Measurement`**: A generalized measurement framework supporting both standard Projective Measurements and **Positive Operator-Valued Measures (POVM)**. This is crucial for implementing optimal discrimination strategies and ambiguous state detection.
 * **`Gate`**: Provides standard unitary operations and allows for the definition of custom single and multi-qubit unitaries.
 * **`Sampler`**: Permits to run multiple shots of measurements using a `Measurement` and `QuantumChannel`.
+
+### Qubit Ordering Convention
+
+`qcrypto` uses **big-endian** ordering: qubit 0 is the most significant bit. The state $|q_0\, q_1\, \cdots\, q_{N-1}\rangle$ maps to the amplitude at index $q_0 \cdot 2^{N-1} + q_1 \cdot 2^{N-2} + \cdots + q_{N-1} \cdot 2^0$. In the notation $|01\rangle$, qubit 0 is in state $|0\rangle$ and qubit 1 is in state $|1\rangle$. Measurement labels produced by `Measurement::compose` follow the same order: the leftmost character corresponds to the first element of the `targets` slice. This is the **opposite** of [Qiskit's convention](https://quantum.cloud.ibm.com/docs/en/guides/bit-ordering), which places qubit 0 at the least significant bit.
 
 ## Implemented Protocols
 
