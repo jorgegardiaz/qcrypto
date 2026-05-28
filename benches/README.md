@@ -2,6 +2,24 @@
 
 This directory contains the complete benchmark suite for `qcrypto`. It covers four areas: state-vector and density-matrix scaling, core gate throughput, noise channel application cost, and end-to-end quantum protocol simulation. Two Python comparison scripts measure equivalent workloads against Qiskit Aer and QuTiP, and a shell script orchestrates the full pipeline.
 
+## Table of Contents
+
+- [Running the Full Pipeline](#running-the-full-pipeline)
+- [Rust Benchmarks](#rust-benchmarks)
+  - [1. State Construction and Scaling](#1-state-construction-and-scaling-scalingrs)
+  - [2. Core Gate Operations](#2-core-gate-operations-core_opsrs)
+  - [3. Noise Channel Application](#3-noise-channel-application-channelsrs)
+  - [4. Protocol Simulation](#4-protocol-simulation-protocolsrs)
+    - [QKD Key-Length Scaling](#qkd-key-length-scaling-protocolsqkd_key_length_scaling)
+    - [BB84 Channel Sweep](#bb84-channel-sweep-protocolsbb84_by_channel)
+    - [QIA-QZKP Scaling](#qia-qzkp-scaling-protocolsqia_scaling)
+    - [GC01 Digital Signature Scaling](#gc01-digital-signature-scaling-protocolsqds_scaling)
+- [Comparison Scripts](#comparison-scripts)
+  - [Qiskit Aer Comparison](#qiskit-aer-comparison-benchesscriptsqiskitcompare_qiskitpy)
+  - [QuTiP Comparison](#qutip-comparison-benchesscriptsqutipcompare_qutippy)
+- [Statistical Methodology](#statistical-methodology)
+- [Plot Color Conventions](#plot-color-conventions)
+
 ---
 
 ## Running the Full Pipeline

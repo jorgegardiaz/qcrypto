@@ -26,6 +26,33 @@ Unlike general-purpose quantum simulators that strictly focus on state-vector ev
 
 The library is implemented in **100% Safe Rust**, minimizing external dependencies and with a pure-Rust dependency tree.
 
+## Table of Contents
+
+- [Key Features](#key-features)
+- [Installation](#installation)
+  - [Cargo Features](#cargo-features)
+- [Library Architecture](#library-architecture)
+  - [Core Structures](#core-structures)
+- [Implemented Protocols](#implemented-protocols)
+  - [1. BB84](#1-bb84-bennett--brassard-1984)
+  - [2. B92 with Optimal POVM](#2-b92-bennett-1992-with-optimal-povm)
+  - [3. BBM92](#3-bbm92-bennett-brassard--mermin-1992)
+  - [4. E91](#4-e91-ekert-1991)
+  - [5. SARG04](#5-sarg04-scarani-acín-ribordy--gisin-2004)
+  - [6. Six-State](#6-six-state-pasquinucci--gisin-1999)
+  - [7. QIA-QZKP](#7-qia-qzkp-garcia-diaz-et-al-2025)
+  - [8. GC01](#8-gc01-gottesman--chuang-2001)
+- [Usage Examples](#usage-example)
+  - [Simulating a Noisy Channel with Density Matrices](#simulating-a-noisy-channel-with-density-matrices)
+  - [Running the QIA-QZKP Protocol](#running-the-qia-qzkp-protocol)
+  - [Reproducible Simulations (Deterministic RNG)](#reproducible-simulations-deterministic-rng)
+  - [Running Multiple Executions and Saving to CSV](#running-multiple-executions-and-saving-to-csv)
+- [CLI Tool: qcryptool](#cli-tool-qcryptool)
+- [Benchmarks](#benchmarks)
+- [References](#references)
+- [License](#license)
+- [Contributing](#contributing)
+
 ## Key Features
 
 * **Dual-State Formalism:** Automatic transparent conversion from `StateVector` ($O(2^N)$ memory) to `StateDensityMatrix` ($O(4^N)$ memory) exactly only when a noisy channel is applied.
