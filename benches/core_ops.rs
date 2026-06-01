@@ -221,14 +221,21 @@ fn bench_measurement(c: &mut Criterion) {
 ///
 /// Matches QuTiP's `metric_purity` task in `compare_qutip.py`, enabling
 /// a direct timing comparison between qcrypto (Rust) and QuTiP (Python).
-/// The input state is a genuinely mixed density matrix obtained by applying
-/// amplitude_damping(0.3) to every qubit of the |0⟩ state.
+/// The input is a genuinely mixed density matrix obtained by applying the
+/// depolarizing channel with p = 0.5 to every qubit of the |+…+⟩ state.
+/// qcrypto and QuTiP share the same depolarizing convention
+/// (E(ρ) = (1−p)ρ + p·I/2, Kraus K0=√(1−3p/4)·I, K1=√(p/4)·X, K2=√(p/4)·Y,
+/// K3=√(p/4)·Z), so p = 0.5 is comparable on both sides with no conversion.
 fn bench_purity(c: &mut Criterion) {
     let mut group = c.benchmark_group("metrics/purity");
 
     let make_mixed_dm = |n: usize| -> QuantumState {
         let mut s = QuantumState::new(n);
-        let ch = QuantumChannel::amplitude_damping(0.3);
+        // Prepare |+…+⟩ so the channel yields a genuinely mixed state.
+        for q in 0..n {
+            s.apply(&Gate::h(), &[q]).unwrap();
+        }
+        let ch = QuantumChannel::depolarizing(0.5);
         for q in 0..n {
             s.apply_channel(&ch, &[q]).unwrap();
         }

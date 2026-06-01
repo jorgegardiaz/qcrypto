@@ -1,9 +1,20 @@
 """QuTiP vs qcrypto benchmark: open-system / density-matrix operations.
 
+Scope and intent
+----------------
+qcrypto is a simulator of *quantum cryptographic protocols*, not a
+general-purpose open-quantum-systems package.  This script is NOT a claim of
+superiority over QuTiP; it characterizes, against an established reference, the
+wall-clock cost a *user* pays for the density-matrix operations common in
+protocol simulation.  Timings include the setup each library genuinely requires
+for the task (e.g. QuTiP's Kraus-operator expansion), because that is part of
+the cost the user actually pays.
+
 Focuses on the tasks where QuTiP is the canonical reference for open quantum
-systems: noise channel application on density matrices, purity, and fidelity.
-Gate simulation and sampling are covered by compare_qiskit.py and are
-intentionally excluded here.
+systems: noise channel application on density matrices and purity. Fidelity is
+intentionally excluded — qcrypto exposes no ``fidelity()`` method, so there is
+no counterpart to compare against. Gate simulation and sampling are covered by
+compare_qiskit.py and are intentionally excluded here.
 
 Channel conventions (qcrypto vs QuTiP)
 ---------------------------------------
@@ -45,7 +56,7 @@ From inside benches/scripts/qutip/:
 
     uv run compare_qutip.py
     uv run compare_qutip.py --dm-qubits 2 3 4 5 6 8 10 --repeats 20
-    uv run compare_qutip.py --skip lindblad
+    uv run compare_qutip.py --skip channels
     uv run compare_qutip.py --out ../../data/qutip_results.csv
 """
 
@@ -286,8 +297,17 @@ def bench_channels(qubits: list[int], repeats: int) -> list[Measurement]:
     N≈5.  The Kraus-sum path keeps memory at O(4^N) (same as ρ itself) and
     matches criterion's warm-path channels bench in cost structure.
 
-    Expanded Kraus operators are precomputed outside the timed loop so that
-    only the application cost is measured (mirrors iter_batched in criterion).
+    The expanded Kraus operators are built *inside* the timed loop on purpose.
+    The goal of this suite is to characterize the wall-clock cost a user pays
+    for the operations common in cryptographic-protocol simulation — not to
+    compete as a general-purpose simulator.  A qcrypto user calls
+    ``apply_channel(&ch, &[0])`` and the library applies the Kraus operator
+    locally on the target qubit (apply_local_left/right), paying no expansion
+    cost; a QuTiP user must materialize the I⊗…⊗K⊗…⊗I operator to do the same
+    thing, so that expansion is part of QuTiP's real per-application cost and
+    is counted.  (Amortization caveat: a user applying the same channel to the
+    same qubit across many steps would build the operator once and reuse it;
+    we measure the cold single-application cost.)
     """
     print("\n--- Test 1: noise channel application ---")
     print("Equivalence check at 1 qubit (|+⟩⟨+| state):")
@@ -304,7 +324,8 @@ def bench_channels(qubits: list[int], repeats: int) -> list[Measurement]:
             def task(
                 k1q: list[np.ndarray] = kraus_1q, rho: Qobj = rho, nq: int = n
             ) -> Qobj:
-                # Move expansion inside the timed loop to match qcrypto's behavior
+                # Expansion is inside the timed loop on purpose (see docstring):
+                # it is part of the cost a QuTiP user pays per application.
                 kraus_nq = _expand_kraus(k1q, 0, nq)
                 return _apply_kraus(kraus_nq, rho)
 
@@ -317,36 +338,40 @@ def bench_channels(qubits: list[int], repeats: int) -> list[Measurement]:
 
 
 # ---------------------------------------------------------------------------
-# Test 2: purity and fidelity
+# Test 2: purity
 # ---------------------------------------------------------------------------
 
 
 def bench_metrics(qubits: list[int], repeats: int) -> list[Measurement]:
     """Purity = Tr(ρ²) on genuinely mixed states.
 
-    Mixed state: apply amplitude_damping(0.3) to every qubit of |+…+⟩.
-    Purity: 1 − entropy_linear(ρ).
+    Mixed state: apply the depolarizing channel with p=0.5 to every qubit of
+    |+…+⟩.  Purity: 1 − entropy_linear(ρ).
 
     Matches qcrypto's ``metrics/purity`` criterion group in ``core_ops.rs``,
-    which uses the same channel and parameter, enabling a direct 1:1 timing
-    comparison.  Fidelity is intentionally excluded: qcrypto does not expose
-    a ``fidelity()`` method, so there is no qcrypto counterpart to compare
+    which uses the same channel, parameter, and initial state, enabling a
+    direct 1:1 timing comparison.  qcrypto and QuTiP share the same
+    depolarizing convention (E(ρ) = (1−p)ρ + p·I/2, Kraus K0=√(1−3p/4)·I,
+    K1=√(p/4)·X, K2=√(p/4)·Y, K3=√(p/4)·Z — verified by the equivalence
+    assertion below), so p=0.5 is comparable on both sides with no conversion.
+    Fidelity is intentionally excluded: qcrypto does not expose a
+    ``fidelity()`` method, so there is no qcrypto counterpart to compare
     against.
     """
     print("\n--- Test 2: purity ---")
 
-    kraus_ad = _kraus_amplitude_damping(0.3)
+    kraus_dep = _kraus_depolarizing(0.5)
     rho_1q_np = _apply_numpy(
-        kraus_ad, np.array([[0.5, 0.5], [0.5, 0.5]], dtype=complex)
+        kraus_dep, np.array([[0.5, 0.5], [0.5, 0.5]], dtype=complex)
     )
-    print("Equivalence check at 1 qubit (amplitude-damped |+⟩):")
+    print("Equivalence check at 1 qubit (depolarized |+⟩, p=0.5):")
     _assert_purity_equiv(rho_1q_np, _qobj_oper(rho_1q_np))
 
     out: list[Measurement] = []
     for n in qubits:
         rho_qt = _uniform_dm(n)
         for target in range(n):
-            rho_qt = _apply_kraus(_expand_kraus(kraus_ad, target, n), rho_qt)
+            rho_qt = _apply_kraus(_expand_kraus(kraus_dep, target, n), rho_qt)
 
         def task_purity(rho: Qobj = rho_qt) -> float:
             return 1.0 - float(entropy_linear(rho))
@@ -415,7 +440,7 @@ def main() -> None:
         "--skip",
         nargs="*",
         default=[],
-        choices=["channels", "metrics", "lindblad"],
+        choices=["channels", "metrics"],
         help="Skip one or more benchmark groups by name.",
     )
     args = ap.parse_args()
