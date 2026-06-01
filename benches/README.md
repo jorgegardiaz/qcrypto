@@ -2,6 +2,8 @@
 
 This directory contains the complete benchmark suite for `qcrypto`. It covers four areas: state-vector and density-matrix scaling, core gate throughput, noise channel application cost, and end-to-end quantum protocol simulation. Two Python comparison scripts measure equivalent workloads against Qiskit Aer and QuTiP, and a shell script orchestrates the full pipeline.
 
+> **Scope and intent.** `qcrypto` is a simulator of *quantum cryptographic protocols*, not a general-purpose quantum-computing simulator. The comparisons below are **not** a claim of superiority over Qiskit or QuTiP as simulators — Qiskit Aer in particular is faster and more capable in that role. Their purpose is to characterize, against established references, the wall-clock cost a *user* pays for the operations that are common when simulating cryptographic protocols (single-qubit gates and Bell-pair construction, noise channels on density matrices, multi-shot sampling, and purity). Timings therefore include the setup each library genuinely requires for these tasks (e.g. operator expansion in QuTiP, circuit invocation in Aer). Differences between individual micro-operations that are dominated by fixed per-invocation overhead (e.g. `gate_X` vs `gate_CCX`) should not be over-interpreted.
+
 ## Table of Contents
 
 - [Running the Full Pipeline](#running-the-full-pipeline)
@@ -85,7 +87,7 @@ Measures the cost of individual gate and measurement operations on both represen
 - `measure_all_qubits`: Sequential measurement of all N qubits; collapses the state N times, with each measurement operating on the post-collapse state of the previous step.
 - Range: N ∈ {4, 6, 8, 10}
 
-**Purity Tr(ρ²)** (`metrics/purity`): Measures the cost of computing the purity of a genuinely mixed density matrix. The mixed state is prepared by applying `amplitude_damping(0.3)` to every qubit of |0...0⟩ before the timed loop. This benchmark is designed to be directly comparable to QuTiP's `metric_purity` task in `compare_qutip.py`.
+**Purity Tr(ρ²)** (`metrics/purity`): Measures the cost of computing the purity of a genuinely mixed density matrix. The mixed state is prepared by applying the `depolarizing(0.5)` channel to every qubit of |+...+⟩ before the timed loop. This benchmark is designed to be directly comparable to QuTiP's `metric_purity` task in `compare_qutip.py`, which uses the same depolarizing convention (E(ρ) = (1−p)ρ + p·I/2) and the same initial state, so p = 0.5 is comparable on both sides with no conversion.
 
 - Range: DM N ∈ {2, 3, 4, 5, 6, 8, 10}
 
@@ -215,17 +217,15 @@ uv run compare_qutip.py [options]
 | :--- | :--- | :--- |
 | `--dm-qubits` | `2 3 4 5 6 8 10` | Qubit counts for density-matrix benchmarks. |
 | `--repeats` | `50` | Number of independent repetitions per data point. |
-| `--skip` | (none) | Skip one or more tasks: `channels`, `metrics`, `lindblad`. |
+| `--skip` | (none) | Skip one or more tasks: `channels`, `metrics`. |
 | `--out` | `../../data/qutip/qutip_results.csv` | Output CSV path. |
 | `--env-out` | `../../data/qutip/qutip_environment.txt` | Output path for version and platform metadata. |
 
 **Benchmarked tasks:**
 
-- **Noise channel application** (`channel_depolarizing`, `channel_amplitude_damping`, `channel_phase_damping`): Apply a single-qubit channel to qubit 0 of an N-qubit uniform density matrix using a direct Kraus sum Σ K·ρ·K†. The superoperator representation (which would require a (4^N)² matrix — approximately 68 GB at N = 8) is not used; the Kraus-sum path keeps memory at O(4^N), matching qcrypto's internal cost structure. Expanded Kraus operators are precomputed outside the timed loop, mirroring `iter_batched` in Criterion.
+- **Noise channel application** (`channel_depolarizing`, `channel_amplitude_damping`, `channel_phase_damping`): Apply a single-qubit channel to qubit 0 of an N-qubit uniform density matrix using a direct Kraus sum Σ K·ρ·K†. The superoperator representation (which would require a (4^N)² matrix — approximately 68 GB at N = 8) is not used; the Kraus-sum path keeps memory at O(4^N), matching qcrypto's internal cost structure. The expanded Kraus operators are built **inside** the timed loop on purpose: a qcrypto user calls `apply_channel(&ch, &[0])` and the library applies the operator locally on the target qubit without ever materializing the expanded I⊗…⊗K⊗…⊗I operator, whereas a QuTiP user must build it to perform the same task. Because the suite measures the wall-clock cost a *user* pays for protocol-relevant operations (not a simulator kernel), that expansion is part of QuTiP's real per-application cost and is counted. (Amortization caveat: applying the same channel to the same qubit across many steps would build the operator once and reuse it; the benchmark measures the cold single-application cost.)
 
-- **Purity** (`metric_purity`): Compute Tr(ρ²) = 1 − entropy_linear(ρ) on a genuinely mixed density matrix. The input state is prepared by applying `amplitude_damping(0.3)` to every qubit of |+...+⟩, matching the setup in `core_ops.rs` to enable a direct timing comparison.
-
-- **Lindblad evolution** (`lindblad_evolution`): Evolve the system under amplitude damping using QuTiP's `mesolve` ODE integrator (H = 0, collapse operator L = √γ·σ₋ on qubit 0, t ∈ [0, 1]). This is mathematically equivalent to a single discrete Kraus step, but `mesolve` incurs solver setup and ODE step-control overhead that is not present in qcrypto's single matrix multiplication. These timings characterize QuTiP's ODE overhead rather than channel throughput and should not be compared directly with qcrypto's channel application times.
+- **Purity** (`metric_purity`): Compute Tr(ρ²) = 1 − entropy_linear(ρ) on a genuinely mixed density matrix. The input state is prepared by applying the `depolarizing(0.5)` channel to every qubit of |+...+⟩, matching the setup in `core_ops.rs` (same channel, parameter, and initial state) to enable a direct timing comparison.
 
 **Channel conventions and equivalence assertions**: QuTiP has no built-in convenience functions for depolarizing, amplitude damping, or phase damping. All channels are constructed from Kraus operators that exactly match qcrypto's internal definitions. Before any timing loop, the script verifies at one qubit that the QuTiP superoperator path (kraus_to_super → operator_to_vector → vector_to_operator) produces the same density matrix as a direct NumPy Kraus sum, which mirrors qcrypto's internal computation. The script aborts if any equivalence check fails with a tolerance of 1e-10.
 
