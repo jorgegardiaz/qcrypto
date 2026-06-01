@@ -1,5 +1,17 @@
 #!/usr/bin/env python3
-"""Performance comparison: qcrypto (Rust) vs Qiskit Aer (Python/C++).
+"""Performance comparison: qcrypto vs Qiskit Aer.
+
+Scope and intent
+----------------
+qcrypto is a simulator of *quantum cryptographic protocols*, not a
+general-purpose quantum-computing simulator. This script is NOT a claim that
+qcrypto beats Qiskit Aer as a simulator; Aer is faster and more capable in
+that role. The goal is to characterize, against an established reference, the
+wall-clock cost a *user* pays for the operations common in quantum cryptography
+protocols simulations. Timings therefore include the setup each library genuinely
+requires (e.g. Aer's circuit invocation / state load). Do not over-interpret
+differences between micro-operations dominated by fixed per-invocation overhead
+(gate_X vs gate_CCX).
 
 Methodological honesty
 ----------------------
@@ -19,21 +31,28 @@ What this script deliberately does **not** do:
 - Does **not** compare QKD protocols (BB84, etc.): Aer does not implement them.
 - Does **not** hide cases where qcrypto is slower.
 
-Methodological decisions for the paper
+Methodological decisions
 ---------------------------------------
 - ``optimization_level=0`` for **all** Aer benchmarks: disables transpilation
   passes (gate fusion, pattern simplification).  Without this, recognisable
   circuits such as GHZ may be simplified before simulation, artificially
   favouring Aer.
-- ``bench_gates`` uses ``set_statevector`` to load a pre-computed state before
-  timing, mirroring ``iter_batched`` in criterion: only the gate cost is
-  measured, not state preparation.  Declare this in the paper.
+- ``bench_gates`` loads a pre-computed state via ``set_statevector`` so that
+  state *preparation* (the H layer) is excluded from the timed region.  Note,
+  however, that the timed ``sim.run(qc).result()`` still includes loading the
+  2^N-amplitude state into the simulator (``set_statevector``), extracting it
+  (``save_statevector``), and Aer's per-run job dispatch.  It is therefore NOT
+  a pure single-gate measurement equivalent to criterion's ``iter_batched``
+  (which times only ``apply()`` on a resident state); for small N the Aer
+  overhead dominates.
 - ``bench_sampling`` measures full n-qubit bitstring sampling (2^N outcomes).
-  qcrypto's ``Sampler`` targets qubit 0 only (2 outcomes); the qubit-count
-  axis reflects probability-distribution computation cost (O(2^N)), not the
-  number of possible outcomes.  State this distinction in the paper.
+  qcrypto's ``Sampler.run_par_computational_basis`` samples all N qubits the
+  same way (it computes the full 2^N distribution once, then draws each shot
+  with a binary-search CDF lookup), so the sample spaces match.  One asymmetry
+  remains: Qiskit rebuilds the state inside the timed run, while qcrypto
+  prepares it once outside; at 1e5–1e6 shots the sampling cost dominates.
 - qcrypto is measured with criterion (rigorous, subtracts overhead).
-  Aer is measured with timeit.  Declare both methods in the paper.
+  Aer is measured with timeit.
 
 Usage
 -----
@@ -189,10 +208,12 @@ def bench_sampling(
 def bench_gates(qubits: list[int], repeats: int) -> list[Measurement]:
     """Apply X, CX, CCX to a pre-prepared N-qubit state.
 
-    Uses ``set_statevector`` to load a pre-computed state (H on all qubits)
-    before timing, so only the gate cost is measured — equivalent to
-    ``iter_batched`` in criterion.  ``optimization_level=0`` prevents Aer from
-    fusing or eliminating the target gate.
+    Uses ``set_statevector`` to load a pre-computed state (H on all qubits) so
+    that state preparation is excluded.  The timed region nonetheless includes
+    the state load + extraction + Aer job dispatch, so this is not a pure
+    gate-cost measurement equivalent to criterion's ``iter_batched`` (see the
+    module docstring).  ``optimization_level=0`` prevents Aer from fusing or
+    eliminating the target gate.
     """
     sim = AerSimulator(method="statevector")
     out: list[Measurement] = []
