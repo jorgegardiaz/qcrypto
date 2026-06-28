@@ -115,7 +115,7 @@ pub trait QuantumStateImpl:
     ) -> Result<bool, StateError>;
     /// Returns the computational-basis probability for each basis state.
     ///
-    /// For a `StateVector`: `p[i] = |amplitude[i]|²`.
+    /// For a `StateVector`: `p[i] = |amplitude[i]|^2`.
     /// For a `StateDensityMatrix`: `p[i] = Re(ρ[i,i])`, clamped to zero.
     ///
     /// The returned vector has length `2^num_qubits` and sums to 1.
