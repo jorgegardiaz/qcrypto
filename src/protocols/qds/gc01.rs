@@ -12,9 +12,9 @@
 //!
 //! | basis | value=false | value=true |
 //! |-------|-------------|------------|
-//! | 0 (Z) | \|0⟩        | \|1⟩       |
-//! | 1 (X) | \|+⟩        | \|-⟩       |
-//! | 2 (Y) | \|+i⟩       | \|-i⟩      |
+//! | 0 (Z) | |0⟩        | |1⟩       |
+//! | 1 (X) | |+⟩        | |-⟩       |
+//! | 2 (Y) | |+i⟩       | |-i⟩      |
 //!
 //! Using 3 MUBs reduces the probability that an adversary prepares a valid forgery
 //! to at most (2/3) per position (vs 3/4 with two MUBs), making the scheme harder
@@ -29,7 +29,7 @@
 //!    received qubit, a fresh ancilla, and a fresh reference state prepared according
 //!    to `K_m`:
 //!
-//! P(fail) = (1 − |⟨received|reference⟩|²) / 2.
+//! P(fail) = (1 − |⟨received|reference⟩|^2) / 2.
 //!
 //! **Eve model**: intercept-resend with a uniformly random basis from the 3 MUBs.
 
@@ -456,7 +456,8 @@ mod tests {
         let channel = QuantumChannel::bit_flip(0.3);
         let result = run(500, &channel, &channel, 0.0, 0.0).unwrap();
 
-        assert!(result.bob_mismatches > 0 || result.charlie_mismatches > 0);
+        assert!(result.bob_mismatches > 0);
+        assert!(result.charlie_mismatches > 0);
         assert!(!result.signature_accepted);
     }
 
