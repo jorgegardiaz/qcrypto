@@ -155,8 +155,8 @@ pub fn expand_operator(
             // Get the value of the matrix in the position associated to the iteration
             let val = matrix[[small_row, small_col]];
             // Check if val is 0
-            if val.norm_sqr() < f64::EPSILON {
-                // Due to floating-point representation machine epsilon is used
+            if val.norm_sqr() < 1e-12 {
+                // Due to floating-point representation, really small entries are skipped
                 continue;
             }
             // Construct global row index: preserve passive bits, update target bits
@@ -520,7 +520,7 @@ pub fn apply_local_left(
             for small_col in 0..k_dim {
                 let val = local_matrix[[small_row, small_col]];
 
-                if val.norm_sqr() < f64::EPSILON {
+                if val.norm_sqr() < 1e-12 {
                     continue;
                 }
 
@@ -596,7 +596,7 @@ pub fn apply_local_right(
             for small_row_idx in 0..k_dim {
                 let val = local_matrix[[small_row_idx, small_col_idx]];
 
-                if val.norm_sqr() < f64::EPSILON {
+                if val.norm_sqr() < 1e-12 {
                     continue;
                 }
 
@@ -672,7 +672,7 @@ pub fn apply_local_vector(
         for small_col in 0..k_dim {
             let val = local_matrix[[small_row, small_col]];
 
-            if val.norm_sqr() < f64::EPSILON {
+            if val.norm_sqr() < 1e-12 {
                 continue;
             }
 
