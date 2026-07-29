@@ -34,7 +34,7 @@ The `reproduce.sh` script runs all four steps in order: Rust benchmarks, Qiskit 
 
 | Option | Description |
 | :--- | :--- |
-| `--skip-rust` | Skip the Rust benchmarks; reuse existing data from `target/criterion/`. |
+| `--skip-qcrypto` | Skip the Rust benchmarks; reuse existing data from `target/criterion/`. |
 | `--skip-qiskit` | Skip the Qiskit Aer comparison step. |
 | `--skip-qutip` | Skip the QuTiP comparison step. |
 | `--filter <pattern>` | Pass a filter to `cargo bench` (e.g. `--filter scaling`). |

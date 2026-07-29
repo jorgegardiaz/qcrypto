@@ -10,7 +10,7 @@
 #
 # Options:
 #   --skip-qiskit   Skip the Qiskit Aer comparison step.
-#   --skip-rust     Skip the Rust criterion step (use existing target/criterion data).
+#   --skip-qcrypto  Skip the qcrypto criterion step (use existing target/criterion data).
 #   --filter <pat>  Pass a filter pattern to cargo bench (e.g. --filter scaling).
 
 set -euo pipefail
@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --skip-qiskit) SKIP_QISKIT=1 ;;
         --skip-qutip)  SKIP_QUTIP=1 ;;
-        --skip-rust)   SKIP_RUST=1 ;;
+        --skip-qcrypto)   SKIP_RUST=1 ;;
         --filter)      FILTER="$2"; shift ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
@@ -67,7 +67,7 @@ if [[ $SKIP_RUST -eq 0 ]]; then
     echo "      Rust benchmarks complete."
 else
     echo
-    echo "[1/4] Skipping Rust benchmarks (--skip-rust)."
+    echo "[1/4] Skipping Rust benchmarks (--skip-qcrypto)."
 fi
 
 # ---------------------------------------------------------------------------
