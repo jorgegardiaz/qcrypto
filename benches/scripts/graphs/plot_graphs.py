@@ -42,13 +42,14 @@ import argparse
 import json
 import re
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
+from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 
@@ -194,6 +195,35 @@ def _save(fig: Figure, out: Path, name: str, category: str = "qcrypto") -> None:
 
 
 # ---------------------------------------------------------------------------
+# Confidence-interval whiskers
+#
+# Every figure represents a point's confidence interval as a vertical
+# error-bar whisker (with caps) through the point estimate, rather than a
+# translucent fill_between band.
+# ---------------------------------------------------------------------------
+
+
+def _ci_errorbar(
+    ax: Axes,
+    x: pd.Series,
+    lower: pd.Series,
+    upper: pd.Series,
+    point: pd.Series,
+    color: str,
+    **kwargs: Any,
+) -> None:
+    """Plot *point* vs *x* with the CI as vertical error-bar whiskers."""
+    ax.errorbar(
+        x,
+        point,
+        yerr=[point - lower, upper - point],
+        capsize=3,
+        color=color,
+        **kwargs,
+    )
+
+
+# ---------------------------------------------------------------------------
 # qcrypto figures
 # ---------------------------------------------------------------------------
 
@@ -213,17 +243,15 @@ def fig_scaling_time(crit: pd.DataFrame, out: Path) -> None:
         color = COLOR_SV if fn == "StateVector" else COLOR_DM
         lstyle = "-" if fn == "StateVector" else "--"
         marker = "o" if fn == "StateVector" else "s"
-        ax.errorbar(
-            grp["qubits"],
-            grp["point_ns"] / 1e6,
-            yerr=[
-                (grp["point_ns"] - grp["lower_ns"]) / 1e6,
-                (grp["upper_ns"] - grp["point_ns"]) / 1e6,
-            ],
+        _ci_errorbar(
+            ax,
+            _col(grp, "qubits"),
+            _col(grp, "lower_ns") / 1e6,
+            _col(grp, "upper_ns") / 1e6,
+            _col(grp, "point_ns") / 1e6,
+            color=color,
             marker=marker,
             linestyle=lstyle,
-            capsize=3,
-            color=color,
             label=str(fn) or "state",
         )
     ax.set_yscale("log")
@@ -332,17 +360,18 @@ def fig_protocols(crit: pd.DataFrame, out: Path) -> None:
     sub = _drop_na(sub, "length").sort_values("length")
 
     fig, ax = plt.subplots()
-    for proto, grp in sub.groupby("function"):
-        grp = grp.sort_values("length")
-        ax.errorbar(
-            grp["length"],
-            grp["point_ns"] / 1e6,
-            yerr=[
-                (grp["point_ns"] - grp["lower_ns"]) / 1e6,
-                (grp["upper_ns"] - grp["point_ns"]) / 1e6,
-            ],
+    protocols = sorted(sub["function"].unique())
+    for index, proto in enumerate(protocols):
+        grp = _where(sub, "function", proto).sort_values("length")
+        color = f"C{index}"
+        _ci_errorbar(
+            ax,
+            _col(grp, "length"),
+            _col(grp, "lower_ns") / 1e6,
+            _col(grp, "upper_ns") / 1e6,
+            _col(grp, "point_ns") / 1e6,
+            color=color,
             marker="o",
-            capsize=3,
             label=str(proto),
         )
     ax.set_xlabel("Key length (qubits / pairs)")
@@ -377,7 +406,7 @@ def fig_qber(data_qcrypto: Path, out: Path) -> None:
 
 
 def fig_gates_sv_dm(crit: pd.DataFrame, out: Path) -> None:
-    """Gate application time: SV vs DM, three gate types, fill_between CI."""
+    """Gate application time: SV vs DM, three gate types, error-bar CI."""
     gate_groups = [
         ("gates/single_qubit_X", "X (1 qubit)", "-", "o"),
         ("gates/two_qubit_CNOT", "CNOT (2 qubits)", "--", "x"),
@@ -398,19 +427,15 @@ def fig_gates_sv_dm(crit: pd.DataFrame, out: Path) -> None:
             fn = str(fn)
             color = colors.get(fn, "gray")
             grp = grp.sort_values("qubits")
-            ax.fill_between(
-                grp["qubits"],
-                grp["lower_ns"] / 1e6,
-                grp["upper_ns"] / 1e6,
-                alpha=0.12,
+            _ci_errorbar(
+                ax,
+                _col(grp, "qubits"),
+                _col(grp, "lower_ns") / 1e6,
+                _col(grp, "upper_ns") / 1e6,
+                _col(grp, "point_ns") / 1e6,
                 color=color,
-            )
-            ax.plot(
-                grp["qubits"],
-                grp["point_ns"] / 1e6,
                 linestyle=lstyle,
                 marker=marker,
-                color=color,
             )
     if not found:
         print("  [skip] gates/* not found in criterion data")
@@ -465,19 +490,15 @@ def fig_conversion(crit: pd.DataFrame, out: Path) -> None:
     sub = _drop_na(sub, "qubits").sort_values("qubits")
 
     fig, ax = plt.subplots()
-    ax.plot(
-        sub["qubits"],
-        sub["point_ns"] / 1e6,
+    _ci_errorbar(
+        ax,
+        _col(sub, "qubits"),
+        _col(sub, "lower_ns") / 1e6,
+        _col(sub, "upper_ns") / 1e6,
+        _col(sub, "point_ns") / 1e6,
+        color=COLOR_DM,
         marker="o",
-        color=COLOR_DM,
         label="SV → DM promotion",
-    )
-    ax.fill_between(
-        sub["qubits"],
-        sub["lower_ns"] / 1e6,
-        sub["upper_ns"] / 1e6,
-        color=COLOR_DM,
-        alpha=0.15,
     )
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
@@ -506,20 +527,16 @@ def fig_measurement(crit: pd.DataFrame, out: Path) -> None:
         marker = "s" if is_all else "o"
         label = "Measure all qubits (seq)" if is_all else "Measure 1 qubit"
 
-        ax.plot(
-            grp["qubits"],
-            grp["point_ns"] / 1e6,
+        _ci_errorbar(
+            ax,
+            _col(grp, "qubits"),
+            _col(grp, "lower_ns") / 1e6,
+            _col(grp, "upper_ns") / 1e6,
+            _col(grp, "point_ns") / 1e6,
+            color=color,
             marker=marker,
             linestyle=lstyle,
-            color=color,
             label=label,
-        )
-        ax.fill_between(
-            grp["qubits"],
-            grp["lower_ns"] / 1e6,
-            grp["upper_ns"] / 1e6,
-            color=color,
-            alpha=0.1,
         )
 
     ax.set_yscale("log")
@@ -586,19 +603,15 @@ def fig_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None:
         return
 
     fig, ax = plt.subplots()
-    ax.plot(
-        qc["qubits"],
-        qc["point_ns"] / 1e6,
+    _ci_errorbar(
+        ax,
+        _col(qc, "qubits"),
+        _col(qc, "lower_ns") / 1e6,
+        _col(qc, "upper_ns") / 1e6,
+        _col(qc, "point_ns") / 1e6,
+        color=COLOR_QCRYPTO,
         marker="o",
-        color=COLOR_QCRYPTO,
         label="qcrypto (Rust)",
-    )
-    ax.fill_between(
-        qc["qubits"],
-        qc["lower_ns"] / 1e6,
-        qc["upper_ns"] / 1e6,
-        color=COLOR_QCRYPTO,
-        alpha=0.15,
     )
     ax.plot(
         aer_sv["qubits"],
@@ -609,12 +622,16 @@ def fig_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None:
         label="Qiskit Aer",
     )
     if "lower_s" in aer_sv.columns and "upper_s" in aer_sv.columns:
-        ax.fill_between(
-            aer_sv["qubits"],
-            aer_sv["lower_s"] * 1e3,
-            aer_sv["upper_s"] * 1e3,
+        ax.errorbar(
+            _col(aer_sv, "qubits"),
+            _col(aer_sv, "median_s") * 1e3,
+            yerr=[
+                (_col(aer_sv, "median_s") - _col(aer_sv, "lower_s")) * 1e3,
+                (_col(aer_sv, "upper_s") - _col(aer_sv, "median_s")) * 1e3,
+            ],
+            fmt="none",
+            capsize=3,
             color=COLOR_QISKIT,
-            alpha=0.15,
         )
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
@@ -646,38 +663,39 @@ def fig_gates_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None:
         if not sub.empty:
             sub["qubits"] = _col(sub, "value").map(_numeric)
             sub = _drop_na(sub, "qubits").sort_values("qubits")
-            ax.plot(
-                sub["qubits"],
-                sub["point_ns"] / 1e6,
+            _ci_errorbar(
+                ax,
+                _col(sub, "qubits"),
+                _col(sub, "lower_ns") / 1e6,
+                _col(sub, "upper_ns") / 1e6,
+                _col(sub, "point_ns") / 1e6,
+                color=COLOR_QCRYPTO,
                 marker=marker,
                 linestyle=lstyle,
-                color=COLOR_QCRYPTO,
-            )
-            ax.fill_between(
-                sub["qubits"],
-                sub["lower_ns"] / 1e6,
-                sub["upper_ns"] / 1e6,
-                color=COLOR_QCRYPTO,
-                alpha=0.1,
             )
             found = True
         aer_sub = _where(aer, "task", aer_task).copy()
         if not aer_sub.empty:
             aer_sub = aer_sub.sort_values("qubits")
+            aer_qubits = _col(aer_sub, "qubits")
             ax.plot(
-                aer_sub["qubits"],
+                aer_qubits,
                 aer_sub["median_s"] * 1e3,
                 marker=marker,
                 linestyle=lstyle,
                 color=COLOR_QISKIT,
             )
             if "lower_s" in aer_sub.columns and "upper_s" in aer_sub.columns:
-                ax.fill_between(
-                    aer_sub["qubits"],
-                    aer_sub["lower_s"] * 1e3,
-                    aer_sub["upper_s"] * 1e3,
+                ax.errorbar(
+                    aer_qubits,
+                    _col(aer_sub, "median_s") * 1e3,
+                    yerr=[
+                        (_col(aer_sub, "median_s") - _col(aer_sub, "lower_s")) * 1e3,
+                        (_col(aer_sub, "upper_s") - _col(aer_sub, "median_s")) * 1e3,
+                    ],
+                    fmt="none",
+                    capsize=3,
                     color=COLOR_QISKIT,
-                    alpha=0.1,
                 )
             found = True
     if not found:
@@ -769,16 +787,14 @@ def fig_channels_vs_qutip(crit: pd.DataFrame, qutip_csv: Path, out: Path) -> Non
         ).sort_values("qubits")
 
         if not qc_sub.empty:
-            ax.errorbar(
-                qc_sub["qubits"],
-                qc_sub["point_ns"] / 1e6,
-                yerr=[
-                    (qc_sub["point_ns"] - qc_sub["lower_ns"]) / 1e6,
-                    (qc_sub["upper_ns"] - qc_sub["point_ns"]) / 1e6,
-                ],
-                marker="o",
-                capsize=3,
+            _ci_errorbar(
+                ax,
+                _col(qc_sub, "qubits"),
+                _col(qc_sub, "lower_ns") / 1e6,
+                _col(qc_sub, "upper_ns") / 1e6,
+                _col(qc_sub, "point_ns") / 1e6,
                 color=COLOR_QCRYPTO,
+                marker="o",
                 label="qcrypto",
             )
             found_any = True
@@ -787,28 +803,26 @@ def fig_channels_vs_qutip(crit: pd.DataFrame, qutip_csv: Path, out: Path) -> Non
         qt_sub = _where(qutip_df, "task", f"channel_{ch_name}").copy()
         qt_sub = qt_sub.sort_values("qubits")
         if not qt_sub.empty:
+            qt_qubits = _col(qt_sub, "qubits")
+            ax.plot(
+                qt_qubits,
+                qt_sub["median_s"] * 1e3,
+                marker="s",
+                linestyle="--",
+                color=COLOR_QUTIP,
+                label="QuTiP",
+            )
             if "lower_s" in qt_sub.columns and "upper_s" in qt_sub.columns:
                 ax.errorbar(
-                    qt_sub["qubits"],
-                    qt_sub["median_s"] * 1e3,
+                    qt_qubits,
+                    _col(qt_sub, "median_s") * 1e3,
                     yerr=[
-                        (qt_sub["median_s"] - qt_sub["lower_s"]) * 1e3,
-                        (qt_sub["upper_s"] - qt_sub["median_s"]) * 1e3,
+                        (_col(qt_sub, "median_s") - _col(qt_sub, "lower_s")) * 1e3,
+                        (_col(qt_sub, "upper_s") - _col(qt_sub, "median_s")) * 1e3,
                     ],
-                    marker="s",
-                    linestyle="--",
+                    fmt="none",
                     capsize=3,
                     color=COLOR_QUTIP,
-                    label="QuTiP",
-                )
-            else:
-                ax.plot(
-                    qt_sub["qubits"],
-                    qt_sub["median_s"] * 1e3,
-                    marker="s",
-                    linestyle="--",
-                    color=COLOR_QUTIP,
-                    label="QuTiP",
                 )
             found_any = True
 
@@ -853,41 +867,37 @@ def fig_purity_vs_qutip(crit: pd.DataFrame, qutip_csv: Path, out: Path) -> None:
 
     fig, ax = plt.subplots()
     if not qc_sub.empty:
-        ax.errorbar(
-            qc_sub["qubits"],
-            qc_sub["point_ns"] / 1e6,
-            yerr=[
-                (qc_sub["point_ns"] - qc_sub["lower_ns"]) / 1e6,
-                (qc_sub["upper_ns"] - qc_sub["point_ns"]) / 1e6,
-            ],
-            marker="o",
-            capsize=3,
+        _ci_errorbar(
+            ax,
+            _col(qc_sub, "qubits"),
+            _col(qc_sub, "lower_ns") / 1e6,
+            _col(qc_sub, "upper_ns") / 1e6,
+            _col(qc_sub, "point_ns") / 1e6,
             color=COLOR_QCRYPTO,
+            marker="o",
             label="qcrypto (Rust)",
         )
     if not qt_sub.empty:
+        qt_qubits = _col(qt_sub, "qubits")
+        ax.plot(
+            qt_qubits,
+            _col(qt_sub, "median_s") * 1e3,
+            marker="s",
+            linestyle="--",
+            color=COLOR_QUTIP,
+            label="QuTiP (Python)",
+        )
         if "lower_s" in qt_sub.columns and "upper_s" in qt_sub.columns:
             ax.errorbar(
-                qt_sub["qubits"],
-                qt_sub["median_s"] * 1e3,
+                qt_qubits,
+                _col(qt_sub, "median_s") * 1e3,
                 yerr=[
-                    (qt_sub["median_s"] - qt_sub["lower_s"]) * 1e3,
-                    (qt_sub["upper_s"] - qt_sub["median_s"]) * 1e3,
+                    (_col(qt_sub, "median_s") - _col(qt_sub, "lower_s")) * 1e3,
+                    (_col(qt_sub, "upper_s") - _col(qt_sub, "median_s")) * 1e3,
                 ],
-                marker="s",
-                linestyle="--",
+                fmt="none",
                 capsize=3,
                 color=COLOR_QUTIP,
-                label="QuTiP (Python)",
-            )
-        else:
-            ax.plot(
-                _col(qt_sub, "qubits"),
-                _col(qt_sub, "median_s") * 1e3,
-                marker="s",
-                linestyle="--",
-                color=COLOR_QUTIP,
-                label="QuTiP (Python)",
             )
     ax.set_yscale("log")
     ax.set_xlabel("Number of qubits")
@@ -925,16 +935,14 @@ def fig_sampling_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None
         if not qc_sub.empty:
             qc_sub["qubits"] = _col(qc_sub, "value").map(_numeric)
             qc_sub = _drop_na(qc_sub, "qubits").sort_values("qubits")
-            ax.errorbar(
-                qc_sub["qubits"],
-                qc_sub["point_ns"] / 1e6,
-                yerr=[
-                    (qc_sub["point_ns"] - qc_sub["lower_ns"]) / 1e6,
-                    (qc_sub["upper_ns"] - qc_sub["point_ns"]) / 1e6,
-                ],
-                marker="o",
-                capsize=3,
+            _ci_errorbar(
+                ax,
+                _col(qc_sub, "qubits"),
+                _col(qc_sub, "lower_ns") / 1e6,
+                _col(qc_sub, "upper_ns") / 1e6,
+                _col(qc_sub, "point_ns") / 1e6,
                 color=COLOR_QCRYPTO,
+                marker="o",
                 label="qcrypto Sampler",
             )
             found = True
@@ -945,28 +953,26 @@ def fig_sampling_vs_qiskit(crit: pd.DataFrame, aer_csv: Path, out: Path) -> None
         ).copy()
         if not aer_sub.empty:
             aer_sub = aer_sub.sort_values("qubits")
+            aer_qubits = _col(aer_sub, "qubits")
+            ax.plot(
+                aer_qubits,
+                _col(aer_sub, "median_s") * 1e3,
+                marker="s",
+                linestyle="--",
+                color=COLOR_QISKIT,
+                label="Qiskit Aer",
+            )
             if "lower_s" in aer_sub.columns and "upper_s" in aer_sub.columns:
                 ax.errorbar(
-                    aer_sub["qubits"],
-                    aer_sub["median_s"] * 1e3,
+                    aer_qubits,
+                    _col(aer_sub, "median_s") * 1e3,
                     yerr=[
-                        (aer_sub["median_s"] - aer_sub["lower_s"]) * 1e3,
-                        (aer_sub["upper_s"] - aer_sub["median_s"]) * 1e3,
+                        (_col(aer_sub, "median_s") - _col(aer_sub, "lower_s")) * 1e3,
+                        (_col(aer_sub, "upper_s") - _col(aer_sub, "median_s")) * 1e3,
                     ],
-                    marker="s",
-                    linestyle="--",
+                    fmt="none",
                     capsize=3,
                     color=COLOR_QISKIT,
-                    label="Qiskit Aer",
-                )
-            else:
-                ax.plot(
-                    _col(aer_sub, "qubits"),
-                    _col(aer_sub, "median_s") * 1e3,
-                    marker="s",
-                    linestyle="--",
-                    color=COLOR_QISKIT,
-                    label="Qiskit Aer",
                 )
             found = True
 
