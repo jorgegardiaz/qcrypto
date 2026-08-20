@@ -53,3 +53,4 @@ debug = true
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
+rayon = "1"
