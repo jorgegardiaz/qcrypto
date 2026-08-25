@@ -10,6 +10,7 @@
 #
 # Options:
 #   --skip-qiskit   Skip the Qiskit Aer comparison step.
+#   --skip-qutip    Skip the QuTip comparison step.
 #   --skip-qcrypto  Skip the qcrypto criterion step (use existing target/criterion data).
 #   --filter <pat>  Pass a filter pattern to cargo bench (e.g. --filter scaling).
 
