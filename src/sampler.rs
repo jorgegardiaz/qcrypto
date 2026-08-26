@@ -151,7 +151,7 @@ impl Sampler {
         Ok(counts)
     }
 
-    /// Parallelised variant of [`run`] using rayon.
+    /// Parallelised variant of [`Self::run`] using rayon.
     ///
     /// The state is cloned and the channel (if any) is applied once on the calling thread.
     /// The probability distribution and CDF are then computed once, and all shots are drawn
@@ -250,7 +250,7 @@ impl Sampler {
 
     /// Samples all qubits in the computational (Z) basis using the fast O(2^N) path.
     ///
-    /// Unlike [`run`], this method reads probabilities directly from the state's amplitudes
+    /// Unlike [`Self::run`], this method reads probabilities directly from the state's amplitudes
     /// or density-matrix diagonal rather than applying measurement operators. It is
     /// equivalent to `run` with a fully-composed Z-basis measurement over all qubits but
     /// avoids the O(4^N) operator overhead of the general path.
@@ -326,9 +326,9 @@ impl Sampler {
         Ok(counts)
     }
 
-    /// Parallel variant of [`run_computational_basis`] using rayon.
+    /// Parallel variant of [`Self::run_computational_basis`] using rayon.
     ///
-    /// Follows the same deterministic seeding pattern as [`run_par`]: the master seed is
+    /// Follows the same deterministic seeding pattern as [`Self::run_par`]: the master seed is
     /// drawn from the global RNG before entering the parallel section, so calling
     /// `qcrypto::set_global_seed` before this method makes the output fully reproducible.
     ///

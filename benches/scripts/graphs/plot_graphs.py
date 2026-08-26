@@ -375,7 +375,7 @@ def fig_protocols(crit: pd.DataFrame, out: Path) -> None:
             label=str(proto),
         )
     ax.set_xlabel("Key length (qubits / pairs)")
-    ax.set_ylabel("Excution time (ms)")
+    ax.set_ylabel("Execution time (ms)")
     ax.set_title("QKD protocol scaling (BB84, B92, BBM92, E91, SixState, SARG04)")
     ax.legend(loc="upper left")
     fig.tight_layout()
