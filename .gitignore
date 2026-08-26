@@ -4,4 +4,4 @@
 figures/
 data/
 __pycache__
-mutants.out/
+/mutants.out/
