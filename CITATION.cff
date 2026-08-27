@@ -19,5 +19,4 @@ keywords:
   - simulation
   - physics
   - rust
-license:
-  - "MIT"
+license: MIT
